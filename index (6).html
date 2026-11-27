@@ -1,0 +1,2896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Air Traffic Control System</title>
+<style>
+  :root{
+    --bg: #0b0f0d;
+    --scope-green: #3ef07c;
+    --scope-green-dim: #1f8a4c;
+    --amber: #ffb100;
+    --red: #ff4d4d;
+    --text-dim: #6ea884;
+    --line: #1c2b22;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background: radial-gradient(ellipse at 50% -10%, #10201a 0%, var(--bg) 60%);
+    font-family: 'Courier New', ui-monospace, monospace;
+    color: var(--scope-green);
+  }
+  .wrap{
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }
+  .console{
+    position: relative;   /* ATIS 배지를 이 기준으로 우하단에 고정하기 위함 */
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: linear-gradient(180deg, #0d1512 0%, #0a100d 100%);
+    box-shadow: 0 0 0 1px rgba(62,240,124,0.05), 0 20px 60px rgba(0,0,0,0.6), inset 0 0 40px rgba(62,240,124,0.02);
+    overflow: hidden;
+  }
+  .titlebar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: #0c130f;
+  }
+  .titlebar .dots{ display:flex; gap:6px; }
+  .titlebar .dots span{
+    width:8px; height:8px; border-radius:50%;
+    background: var(--scope-green-dim);
+    opacity:0.5;
+  }
+  .titlebar .label{
+    font-size:11px; letter-spacing:2px; color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  /* ===================== 홈 / 루트 설정 화면 ===================== */
+  .home{ padding: 50px 30px 46px; text-align: center; }
+  .home .plane{ font-size: 34px; margin-bottom: 14px; filter: drop-shadow(0 0 10px rgba(62,240,124,0.4)); }
+  .home h1{
+    font-size: 20px; letter-spacing: 1.5px; color: var(--scope-green);
+    text-shadow: 0 0 8px rgba(62,240,124,0.3); margin: 0 0 8px;
+  }
+  .home p.sub{ font-size: 12px; color: var(--text-dim); line-height: 1.8; margin: 0 0 30px; }
+
+  .primary-btn{
+    background: var(--scope-green-dim); color: #05130a; border: none;
+    font-family: inherit; font-weight: bold; font-size: 13px; letter-spacing: 1px;
+    padding: 12px 26px; border-radius: 4px; cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+  }
+  .primary-btn:hover{ background: var(--scope-green); }
+  .primary-btn:active{ transform: scale(0.97); }
+  .primary-btn:disabled{ opacity: 0.35; cursor: default; }
+
+  .route-form{ display:none; text-align:left; margin-top: 30px; padding-top: 24px; border-top: 1px dashed var(--line); }
+  .route-form.show{ display:block; animation: fadein 0.25s ease; }
+
+  .field{ margin-bottom: 16px; }
+  .field label{ display:block; font-size: 11px; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 6px; }
+  .field .desc{ font-size: 10.5px; color: #3a5c48; margin-top: 5px; line-height: 1.6; }
+  input[type=text]{
+    width: 100%; background: #081109; border: 1px solid var(--scope-green-dim);
+    color: var(--scope-green); font-family: inherit; font-size: 14px;
+    padding: 10px 12px; border-radius: 4px; outline: none;
+  }
+  input[type=text]:focus{ border-color: var(--scope-green); box-shadow: 0 0 0 2px rgba(62,240,124,0.15); }
+  input[type=text]:disabled{ opacity: 0.4; }
+  input[type=text]::placeholder{ color: #2f5a41; }
+
+  .form-actions{ display:flex; justify-content: center; margin-top: 22px; }
+
+  /* ===================== 시뮬레이션 화면 ===================== */
+  .progress{ display:flex; padding: 12px 16px 0; gap: 4px; }
+  .progress .dot{ flex:1; height: 4px; border-radius: 2px; background: var(--line); transition: background 0.25s ease; }
+  .progress .dot.done{ background: var(--scope-green-dim); }
+  .progress .dot.active{ background: var(--scope-green); box-shadow: 0 0 6px rgba(62,240,124,0.6); }
+
+  .screen{ padding: 16px 20px 20px; }
+
+  .flight-info{
+    display:flex; justify-content: space-between; flex-wrap: wrap;
+    font-size: 11px; color: var(--text-dim);
+    padding-bottom: 10px; border-bottom: 1px dashed var(--line); margin-bottom: 16px; letter-spacing: 0.5px;
+  }
+  .flight-info b{ color: var(--amber); font-weight: normal; }
+
+  .step-tag{ font-size: 11px; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 4px; }
+  .station-name{ font-size: 18px; color: var(--scope-green); text-shadow: 0 0 8px rgba(62,240,124,0.3); margin-bottom: 2px; }
+  .station-freq{ font-size: 12px; color: var(--amber); margin-bottom: 16px; }
+
+  .transmission{ margin-bottom: 18px; }
+  .tag{
+    display:inline-block; font-size: 11px; letter-spacing: 1px; padding: 2px 8px;
+    border: 1px solid var(--scope-green-dim); border-radius: 3px; color: var(--scope-green); margin-bottom: 8px;
+  }
+  .tag.pilot{ border-color: var(--amber); color: var(--amber); }
+  .tag.system{ border-color: var(--text-dim); color: var(--text-dim); }
+
+  .msg{ font-size: 15px; line-height: 1.65; color: #d7fbe4; white-space: pre-line; }
+  .msg.prompt{ color: #cfe8d8; font-style: italic; }
+
+  .required-hint{ margin-top: 10px; font-size: 11px; color: var(--text-dim); line-height: 1.6; }
+  .required-hint code{ background: #081109; padding: 1px 6px; border-radius: 3px; color: var(--amber); margin: 0 2px; }
+
+  .input-row{ display:flex; gap: 10px; margin-top: 10px; }
+  .input-row input[type=text]{ flex: 1; }
+
+  button.send{
+    background: var(--scope-green-dim); color: #05130a; border: none;
+    font-family: inherit; font-weight: bold; font-size: 13px; letter-spacing: 1px;
+    padding: 0 18px; border-radius: 4px; cursor: pointer;
+  }
+  button.send:hover{ background: var(--scope-green); }
+  button.send:active{ transform: scale(0.97); }
+  button.send:disabled{ opacity: 0.35; cursor: default; }
+
+  .result{ margin-top: 14px; padding: 12px 14px; border-radius: 4px; font-size: 13px; line-height: 1.7; display: none; }
+  .result.show{ display:block; animation: fadein 0.2s ease; }
+  @keyframes fadein{ from{ opacity:0; transform: translateY(-4px);} to{opacity:1; transform:none;} }
+  .result.ok{ background: rgba(62,240,124,0.08); border: 1px solid var(--scope-green-dim); color: #d7fbe4; }
+  .result.ng{ background: rgba(255,77,77,0.08); border: 1px solid #7a2c2c; color: #ffd8d8; }
+  .result .verdict{ font-weight: bold; letter-spacing: 1px; margin-bottom: 4px; display:block; }
+  .result.ok .verdict{ color: var(--scope-green); }
+  .result.ng .verdict{ color: var(--red); }
+
+  /* 주파수 변경 타이머 - 이제 화면 전환이 아니라 결과 메시지 아래에 "이어붙는" 형태 */
+  .freq-change{
+    display:none;
+    margin-top: 16px;
+    padding: 16px 10px 4px;
+    border-top: 1px dashed var(--line);
+    text-align:center;
+  }
+  .freq-change.show{ display:block; animation: fadein 0.2s ease; }
+  .freq-change .sys-label{ font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 8px; }
+  .freq-change .freq-target{ font-size: 18px; color: var(--amber); letter-spacing: 1px; margin-bottom: 12px; }
+  .countdown-ring-wrap{ position: relative; width: 78px; height: 78px; margin: 0 auto 10px; }
+  .countdown-ring-wrap svg{ transform: rotate(-90deg); }
+  .countdown-ring-wrap circle{ fill: none; stroke-width: 5; }
+  .countdown-ring-wrap .bg{ stroke: var(--line); }
+  .countdown-ring-wrap .fg{ stroke: var(--scope-green); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .countdown-num{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size: 20px; color: var(--scope-green); text-shadow: 0 0 10px rgba(62,240,124,0.5);
+  }
+  .freq-change .note{ font-size: 11px; color: var(--text-dim); }
+
+  /* 완료 화면 */
+  .complete{ display:none; text-align:center; padding: 30px 10px; }
+  .complete.show{ display:block; animation: fadein 0.2s ease; }
+  .complete .big{ font-size: 17px; color: var(--scope-green); text-shadow: 0 0 8px rgba(62,240,124,0.4); margin-bottom: 8px; letter-spacing: 1px; }
+  .complete .sub{ font-size: 12px; color: var(--text-dim); line-height:1.8; margin-bottom: 18px; }
+
+  .replay{
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    padding: 6px 14px; font-size: 11px; letter-spacing: 1px; cursor: pointer; font-family: inherit;
+  }
+  .replay:hover{ color: var(--scope-green); border-color: var(--scope-green-dim); }
+
+  .footer-note{ text-align:center; font-size: 11px; color: #3a5c48; margin-top: 18px; letter-spacing: 0.5px; line-height: 1.7; }
+
+  /* ===================== ATIS 배지 (Delivery 단계에서만 노출) ===================== */
+  .atis-badge{
+    display:none;
+    position:absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    background: rgba(8,17,9,0.85);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 9px;
+    pointer-events: none;
+  }
+  .atis-badge.show{ display:block; }
+  .atis-badge b{ color: var(--amber); font-weight: normal; }
+
+  /* ===================== GATE 배지 (Delivery/Ground 단계에서 노출, 좌하단) ===================== */
+  .gate-badge{
+    display:none;
+    position:absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    background: rgba(8,17,9,0.85);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 9px;
+    pointer-events: none;
+  }
+  .gate-badge.show{ display:block; }
+  .gate-badge b{ color: var(--amber); font-weight: normal; }
+
+  /* ===================== 음성(TTS) 컨트롤 ===================== */
+  .msg-head{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 8px; }
+  .voice-controls{ display:flex; gap:6px; align-items:center; }
+  .voice-btn{
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    font-family: inherit; font-size: 12px; padding: 3px 8px; border-radius: 4px;
+    cursor: pointer; line-height: 1.4;
+  }
+  .voice-btn:hover{ color: var(--scope-green); border-color: var(--scope-green-dim); }
+  .voice-btn.speaking{ color: var(--scope-green); border-color: var(--scope-green-dim); }
+
+  /* ===================== 반응형: 폰 / 태블릿 / 컴퓨터 ===================== */
+  /* 터치 기기에서 iOS 자동 확대 방지 + 버튼 터치 영역 확보 */
+  input[type=text]{ font-size: 16px; }
+  .wrap{ padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+
+  /* 컴퓨터 (넓은 화면): 더 크고 여유 있게 */
+  @media (min-width: 900px){
+    .wrap{ max-width: 860px; padding-top: 40px; }
+    .home{ padding: 64px 48px 56px; }
+    .home h1{ font-size: 24px; }
+    .screen{ padding: 22px 32px 30px; }
+    .station-name{ font-size: 22px; }
+    .msg{ font-size: 17px; }
+    .flight-info{ font-size: 12px; }
+  }
+
+  /* 폰 (좁은 화면) */
+  @media (max-width: 600px){
+    .wrap{ padding-top: 10px; padding-bottom: 28px; padding-left: 8px; padding-right: 8px; }
+    .console{ border-radius: 8px; }
+    .titlebar{ padding: 8px 12px; }
+    .titlebar .label{ font-size: 10px; letter-spacing: 1px; }
+    .home{ padding: 32px 18px 30px; }
+    .mode-screen{ padding: 32px 18px 30px; }
+    .mode-btn{ min-height: 68px; }
+    .home h1{ font-size: 18px; }
+    .home p.sub{ font-size: 12px; margin-bottom: 22px; }
+    .screen{ padding: 14px 14px 18px; }
+    .flight-info{ font-size: 11px; gap: 2px 10px; }
+    .station-name{ font-size: 17px; }
+    .msg{ font-size: 15px; }
+
+    /* 입력창/전송 버튼을 세로로 쌓아서 누르기 쉽게 */
+    .input-row{ flex-direction: column; gap: 8px; }
+    .input-row input[type=text]{ width: 100%; padding: 12px; }
+    button.send{ width: 100%; min-height: 46px; font-size: 15px; }
+    .primary-btn{ width: 100%; min-height: 48px; }
+    .replay{ min-height: 40px; padding: 8px 16px; }
+
+    /* 음성 버튼: 메시지 위에서 줄바꿈 + 터치 영역 확대 */
+    .msg-head{ flex-wrap: wrap; gap: 8px; }
+    .voice-btn{ min-height: 36px; padding: 6px 12px; font-size: 13px; }
+
+    /* 폰에서는 하단 배지가 입력창을 가리지 않도록 흐름 안에 배치 */
+    .atis-badge, .gate-badge{
+      position: static; display: none; margin: 8px 12px 10px; width: fit-content;
+    }
+    .atis-badge.show, .gate-badge.show{ display: block; }
+    .console{ display: flex; flex-direction: column; }
+  }
+
+  /* 폰 가로 모드 등 높이가 낮은 화면 */
+  @media (max-height: 480px) and (orientation: landscape){
+    .wrap{ padding-top: 6px; }
+    .home{ padding: 18px 24px; }
+    .home .plane{ display: none; }
+  }
+
+  /* ===================== 난이도 선택(메인) 화면 ===================== */
+  .mode-screen{ padding: 50px 30px 46px; text-align: center; }
+  .mode-screen .plane{ font-size: 34px; margin-bottom: 14px; filter: drop-shadow(0 0 10px rgba(62,240,124,0.4)); }
+  .mode-screen h1{
+    font-size: 20px; letter-spacing: 1.5px; color: var(--scope-green);
+    text-shadow: 0 0 8px rgba(62,240,124,0.3); margin: 0 0 8px;
+  }
+  .mode-screen p.sub{ font-size: 12px; color: var(--text-dim); line-height: 1.8; margin: 0 0 28px; }
+  .mode-list{ display:flex; flex-direction: column; gap: 12px; max-width: 420px; margin: 0 auto; }
+  .mode-btn{
+    display:flex; align-items:center; justify-content: space-between; text-align:left;
+    background: #0a120e; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--scope-green); font-family: inherit; cursor: pointer;
+    padding: 16px 18px; min-height: 64px;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  }
+  .mode-btn:hover{ border-color: var(--scope-green-dim); background: #0d1812; }
+  .mode-btn:active{ transform: scale(0.98); }
+  .mode-btn .m-title{ font-size: 17px; letter-spacing: 1px; }
+  .mode-btn .m-en{ font-size: 11px; color: var(--text-dim); letter-spacing: 2px; margin-top: 3px; }
+  .mode-btn .m-arrow{ font-size: 18px; color: var(--scope-green-dim); }
+  .mode-btn.medium{ color: var(--amber); }
+  .mode-btn.hard{ color: var(--red); }
+  .mode-btn.medium .m-arrow{ color: var(--amber); opacity: .6; }
+  .mode-btn.hard .m-arrow{ color: var(--red); opacity: .6; }
+  .route-top{ display:flex; align-items:center; justify-content: space-between; margin-bottom: 18px; }
+  .route-top .level-tag{ font-size: 11px; letter-spacing: 2px; padding: 2px 8px; border: 1px solid var(--scope-green-dim); border-radius: 3px; color: var(--scope-green); }
+  .route-top .level-tag.medium{ border-color: var(--amber); color: var(--amber); }
+  .route-top .level-tag.hard{ border-color: var(--red); color: var(--red); }
+  .level-note{ display:none; font-size: 11px; color: var(--text-dim); margin: 0 0 14px; line-height: 1.6; }
+  .level-note.show{ display:block; }
+
+  /* ===================== 테스트용 건너뛰기 버튼 ===================== */
+  .skip-btn{
+    display:block; margin-top: 12px; width: 100%;
+    background: none; border: 1px dashed var(--amber); color: var(--amber);
+    font-family: inherit; font-size: 12px; letter-spacing: 1px;
+    padding: 9px 12px; border-radius: 4px; cursor: pointer; min-height: 40px;
+  }
+  .skip-btn:hover{ background: rgba(255,177,0,0.08); }
+  .skip-btn:active{ transform: scale(0.98); }
+
+  /* ===================== 음성 인식(눌러서 말하기) ===================== */
+  .mic-wrap{ margin-top: 10px; }
+  .mic-btn{
+    width: 100%; min-height: 48px; background: #0d1812;
+    border: 1px solid var(--scope-green-dim); color: var(--scope-green);
+    font-family: inherit; font-size: 14px; letter-spacing: 1px;
+    border-radius: 6px; cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+  }
+  .mic-btn{ touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .mic-btn:hover{ background: #12231a; }
+  .mic-btn:active{ transform: scale(0.98); }
+  .mic-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+  .mic-btn.listening{
+    border-color: var(--red); color: var(--red); background: #1a0d0d;
+    animation: micPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes micPulse{
+    0%, 100%{ box-shadow: 0 0 0 0 rgba(255,80,80,0.35); }
+    50%{ box-shadow: 0 0 0 8px rgba(255,80,80,0); }
+  }
+  .mic-status{ font-size: 12px; color: var(--text-dim); margin-top: 6px; min-height: 1.3em; line-height: 1.5; }
+  .mic-heard{ font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .mic-opts{ display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color: var(--text-dim); }
+  .mic-opts select{ background:#0a120e; color: var(--scope-green); border:1px solid var(--line); border-radius:4px; font-family:inherit; font-size:12px; padding:4px 6px; }
+  .mic-tip{ font-size:11px; color: var(--text-dim); margin-top:6px; line-height:1.5; }
+  .mic-status.ok{ color: var(--scope-green); }
+  .mic-status.ng{ color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="console">
+    <div class="titlebar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="label">AIR TRAFFIC CONTROL SYSTEM</div>
+      <div class="label" id="titleRight">MODE SELECT</div>
+    </div>
+
+    <!-- ============== 0) 난이도 선택(메인) 화면 ============== -->
+    <div class="mode-screen" id="modeScreen">
+      <div class="plane">✈</div>
+      <h1>Air Traffic Control System</h1>
+      <p class="sub">난이도를 선택해서 시작하세요.</p>
+      <div class="mode-list">
+        <button class="mode-btn easy" data-level="easy">
+          <span><div class="m-title">쉬움</div><div class="m-en">EASY</div></span><span class="m-arrow">▶</span>
+        </button>
+        <button class="mode-btn medium" data-level="medium">
+          <span><div class="m-title">중간</div><div class="m-en">MEDIUM</div></span><span class="m-arrow">▶</span>
+        </button>
+        <button class="mode-btn hard" data-level="hard">
+          <span><div class="m-title">어려움</div><div class="m-en">HARD</div></span><span class="m-arrow">▶</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ============== 1) 루트 만들기 화면 ============== -->
+    <div class="home" id="homeScreen" style="display:none;">
+      <div class="route-top">
+        <button class="replay" id="backToModeBtn">← 난이도 선택</button>
+        <span class="level-tag" id="levelTag">EASY</span>
+      </div>
+      <div class="plane">✈</div>
+      <h1>Air Traffic Control System</h1>
+      <p class="sub">
+        실제 표준 항공 관제 매뉴얼 및 절차를 기반으로 제작되었습니다.<br>
+        직접 루트를 만들고, 실제 교신 순서에 맞춰 관제사와 대화해보세요.
+      </p>
+
+      <button class="primary-btn" id="createRouteBtn">+ 루트 만들기 (Create Route)</button>
+
+      <div class="route-form" id="routeForm">
+        <p class="level-note" id="levelNote"></p>
+        <div class="field">
+          <label>항공사 콜사인 (Callsign)</label>
+          <input type="text" id="callsignInput" placeholder="예: Korean Air 123">
+        </div>
+        <div class="field">
+          <label>출발 공항 (Departure)</label>
+          <input type="text" id="depInput" placeholder="예: RKSI" list="airportList">
+          <div class="desc">이륙 절차(활주로/유도로)는 실제 명칭을 기준으로, 매 비행마다 무작위로 배정됩니다. 클릭하면 목록에서 선택할 수 있어요.</div>
+        </div>
+        <div class="field">
+          <label>도착 공항 (Destination)</label>
+          <input type="text" id="destInput" placeholder="예: RKSS" list="airportList">
+        </div>
+
+        <!-- [수정 사항 5] 출발/도착 입력칸 공통으로 쓰는 공항 목록 -->
+        <datalist id="airportList">
+          <option value="RKSI">RKSI (인천국제공항)</option>
+          <option value="RKSS">RKSS (김포국제공항)</option>
+          <option value="RKPC">RKPC (제주국제공항)</option>
+          <option value="RKNY">RKNY (양양국제공항)</option>
+          <option value="RKTN">RKTN (대구국제공항)</option>
+          <option value="RKJJ">RKJJ (광주공항)</option>
+          <option value="RKTU">RKTU (청주국제공항)</option>
+          <option value="RKPK">RKPK (김해국제공항 / 부산)</option>
+          <option value="RKPU">RKPU (울산공항)</option>
+          <option value="RKJY">RKJY (여수공항)</option>
+          <option value="RKPS">RKPS (사천공항)</option>
+          <option value="RKTH">RKTH (포항경주공항)</option>
+          <option value="RKJK">RKJK (군산공항)</option>
+        </datalist>
+
+        <div class="form-actions">
+          <button class="primary-btn" id="startFlightBtn">비행 시작 ▶</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== 2) 시뮬레이션 화면 (처음엔 숨김) ============== -->
+    <div id="simScreen" style="display:none;">
+      <div class="progress" id="progress"></div>
+
+      <div class="screen">
+        <div class="flight-info">
+          <span>CALLSIGN <b id="infoCallsign">-</b></span>
+          <span>ROUTE <b id="infoRoute">-</b></span>
+          <span><span id="clock">--:--:--Z</span> &nbsp;·&nbsp; <span id="clockKst">KST --:--:--</span></span>
+        </div>
+
+        <!-- 교신 진행 화면 -->
+        <div id="stageView">
+          <div class="step-tag" id="stepTag"></div>
+          <div class="station-name" id="stationName"></div>
+          <div class="station-freq" id="stationFreq"></div>
+
+          <div class="transmission" id="msgBlock">
+            <div class="msg-head">
+              <span class="tag" id="msgTag">ATC</span>
+              <div class="voice-controls">
+                <button class="voice-btn" id="voiceToggleBtn" title="음성 켜기/끄기">🔊 음성 ON</button>
+                <button class="voice-btn" id="replaySpeechBtn" title="다시 듣기">↻ 다시듣기</button>
+              </div>
+            </div>
+            <div class="msg" id="mainMsg"></div>
+          </div>
+
+          <div class="transmission" id="inputBlock">
+            <span class="tag pilot">PILOT (YOU)</span>
+            <div class="input-row">
+              <input type="text" id="pilotInput" placeholder="입력하세요..." autocomplete="off">
+              <button class="send" id="sendBtn">SEND</button>
+            </div>
+            <div class="mic-wrap" id="micWrap" style="display:none;">
+              <button class="mic-btn" id="micBtn">🎤 꾹 누른 채로 말하기</button>
+              <div class="mic-opts">
+                <label for="whisperModel">인식 모델</label>
+                <select id="whisperModel">
+                  <option value="auto">자동 (추천 · 영어 전용)</option>
+                  <option value="Xenova/whisper-base.en">표준 영어 (약 80MB)</option>
+                  <option value="Xenova/whisper-small.en">고정확 영어 (약 250MB)</option>
+                  <option value="Xenova/whisper-tiny.en">가벼움 영어 (약 40MB · 빠른 속도)</option>
+                  <option value="Xenova/whisper-small">다국어 고정확 (한국식 발음 보완)</option>
+                </select>
+              </div>
+              <div class="mic-tip">💡 처음 한 번은 모델을 내려받느라 시간이 걸리며, 이후엔 브라우저에 캐시됩니다.<br>💡 한국식 영어 발음이 뭉개질 때는 "다국어 고정확"을, 속도가 느릴 때는 "가벼움 영어"를 골라 보세요.</div>
+              <div class="mic-status" id="micStatus"></div>
+              <div class="mic-heard" id="micHeard"></div>
+            </div>
+            <div class="required-hint" id="requiredHint"></div>
+            <button class="skip-btn" id="skipBtn" title="입력 없이 다음 단계로 이동 (테스트용)">⏭ 건너뛰기 (테스트용)</button>
+          </div>
+
+          <div class="result" id="result">
+            <span class="verdict" id="verdict"></span>
+            <span id="resultBody"></span>
+          </div>
+
+          <!-- 주파수 변경 타이머: 이제 ATC 마지막 응답 아래에 그대로 이어붙어 표시됨 -->
+          <div class="freq-change" id="freqChange">
+            <div class="sys-label" id="freqSysLabel">SYSTEM — 주파수 변경 중</div>
+            <div class="freq-target" id="freqTarget">121.900</div>
+            <div class="countdown-ring-wrap">
+              <svg width="78" height="78">
+                <circle class="bg" cx="39" cy="39" r="34"></circle>
+                <circle class="fg" id="ring" cx="39" cy="39" r="34"></circle>
+              </svg>
+              <div class="countdown-num" id="countdownNum">10</div>
+            </div>
+            <div class="note" id="freqNote">잠시 후 자동으로 다음 관제 기관과 연결됩니다.</div>
+          </div>
+        </div>
+
+        <!-- 완료 화면 -->
+        <div class="complete" id="complete">
+          <div class="big" id="completeTitle">✅ RUNWAY VACATED</div>
+          <div class="sub">전 구간 교신을 모두 완료했습니다. 수고하셨습니다!</div>
+          <button class="replay" id="replayBtn">↺ 새 루트로 다시 시작</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATIS 배지: Clearance Delivery 단계에서만 표시 -->
+    <div class="atis-badge" id="atisBadge">ATIS <b id="atisLetter">Information Charlie</b></div>
+    <div class="gate-badge" id="gateBadge">GATE <b id="gateNumber">14</b></div>
+
+  </div>
+
+  <div class="footer-note">
+    이 화면은 웹 미리보기이며, 매 비행마다 무작위로 배정되는 활주로·유도로,<br>
+    푸시백/택시 분리 요청, 정답 후 5초간 응답 유지 로직이 모두 반영되어 있습니다.<br>
+    <span id="buildVersion">버전 v2.3 · 실제 김포→제주 ATC 녹음 기반 발음·오인식 패턴 대거 반영</span>
+  </div>
+
+</div>
+
+<script>
+  // ==================================================================
+  // 인천공항(RKSI) 실제 활주로 / 유도로 명칭 목록
+  // ==================================================================
+  // 공항별 실제 활주로 (인천은 기본값으로도 사용)
+  const RUNWAYS = ["15L","15R","16L","16R","33L","33R","34L","34R"];
+  const AIRPORT_RUNWAYS = {
+    RKSI: ["15L","15R","16L","16R","33L","33R","34L","34R"],  // 인천
+    RKSS: ["14L","14R","32L","32R"],                          // 김포
+    RKPC: ["07","25","13","31"],                              // 제주
+    RKNY: ["15","33"],                                        // 양양
+    RKTN: ["13L","13R","31L","31R"],                          // 대구
+    RKJJ: ["04L","04R","22L","22R"],                          // 광주
+    RKTU: ["06L","06R","24L","24R"],                          // 청주
+    RKPK: ["18L","18R","36L","36R"],                          // 김해(부산)
+    RKPU: ["18","36"],                                        // 울산
+    RKJY: ["17","35"],                                        // 여수
+    RKPS: ["06L","06R","24L","24R"],                          // 사천
+    RKTH: ["10","28"],                                        // 포항경주
+    RKJK: ["18","36"]                                         // 군산
+  };
+  function runwaysFor(code){
+    return AIRPORT_RUNWAYS[String(code).toUpperCase()] || RUNWAYS;
+  }
+
+  // 공항별 · 활주로별 실제 SID 목록 (출발 활주로에 맞는 SID 중에서 무작위 배정)
+  // 활주로가 정해지면 그 활주로에서 쓰는 SID만 나옴. SID 이름 = 지점명 + 숫자 + 문자
+  // 목록에 없는 공항(예: 청주)은 SID 대신 "radar vector departure"로 교신
+  const AIRPORT_SIDS = {
+    RKSI: {
+      "15L": ["BINIL2C","BOPTA2C","OSPOT2C","EGOBA2C"], "15R": ["BINIL2C","BOPTA2C","OSPOT2C","EGOBA2C"],
+      "16L": ["BINIL2H","BOPTA2H","OSPOT2H","EGOBA2H"], "16R": ["BINIL2H","BOPTA2H","OSPOT2H","EGOBA2H"],
+      "33L": ["NOPIK2A","BOPTA2A","OSPOT2A","EGOBA2A"], "33R": ["NOPIK2A","BOPTA2A","OSPOT2A","EGOBA2A"],
+      "34L": ["NOPIK2Y","BOPTA2Y","OSPOT2Y","EGOBA2Y"], "34R": ["NOPIK2Y","BOPTA2Y","OSPOT2Y","EGOBA2Y"]
+    },
+    RKSS: {
+      "14L": ["OSPOT2U","EGOBA2U","NOPIK2U","BULTI2U"], "14R": ["OSPOT2U","EGOBA2U","NOPIK2U","BULTI2U"],
+      "32L": ["OSPOT2T","EGOBA2T","NOPIK2T","BULTI2T"], "32R": ["OSPOT2T","EGOBA2T","NOPIK2T","BULTI2T"]
+    },
+    RKPC: {
+      "07": ["KAMIT2E","AKPON1E","TAMNA2E","PANSI2E","LIMDI1E"],
+      "25": ["KAMIT1W","AKPON1W","TAMNA3W","PANSI2W","LIMDI1W"],
+      "31": ["KAMIT2N","AKPON1N"]
+    },
+    RKNY: {
+      "15": ["KAE2E","BIKSI2E","PILIT2E"],
+      "33": ["KAE2N","BIKSI2N","PILIT2N"]
+    },
+    RKTN: {
+      "13L": ["DONGCHON7","DALSEONG3A"], "13R": ["DONGCHON7","DALSEONG3A"],
+      "31L": ["DONGCHON7","DALSEONG3A"], "31R": ["DONGCHON7","DALSEONG3A"]
+    },
+    RKJJ: {
+      "04L": ["GWANGJU3"], "04R": ["GWANGJU3"],
+      "22L": ["GWANGJU4"], "22R": ["GWANGJU4"]
+    },
+    RKPK: {
+      "36L": ["OPONO3","BEVSI3","SOORO2"], "36R": ["OPONO3","BEVSI3","SOORO2"],
+      "18L": ["BURIM3","ULSUK3","BAHDA1"], "18R": ["BURIM3","ULSUK3","BAHDA1"]
+    }
+  };
+  // 출발 활주로 후보: SID 정보가 있으면 SID가 있는 활주로만, 없으면 전체 활주로
+  function departureRunwaysFor(code){
+    const table = AIRPORT_SIDS[String(code).toUpperCase()];
+    return table ? Object.keys(table) : runwaysFor(code);
+  }
+  function sidFor(code, runway){
+    const table = AIRPORT_SIDS[String(code).toUpperCase()];
+    return (table && table[runway]) ? pickRandom(table[runway]) : null;
+  }
+  const TAXIWAY_CODES = ["A","B","M","N","R"];
+  const TAXIWAY_PHONETIC = { A:"Alpha", B:"Bravo", M:"Mike", N:"November", R:"Romeo" };
+  const NATO_ALPHABET = ["Alpha","Bravo","Charlie","Delta","Echo","Foxtrot","Golf","Hotel",
+    "India","Juliett","Kilo","Lima","Mike","November","Oscar","Papa","Quebec","Romeo",
+    "Sierra","Tango","Uniform","Victor","Whiskey","X-ray","Yankee","Zulu"];
+
+  // ==================================================================
+  // 음성(TTS) 발음 보정용 헬퍼
+  // ------------------------------------------------------------
+  // 화면에 "표시"되는 문구(atcMessage)는 그대로 두고, TTS가 실제
+  // 관제사처럼 읽도록 별도의 "atcSpeech" 문구를 만들어서 사용합니다.
+  // ==================================================================
+
+  // 한국 항공사 ICAO 콜사인 코드 -> 실제 무선 교신 콜사인(라디오텔레포니 콜사인)
+  const KOREAN_AIRLINE_CALLSIGNS = {
+    KAL: "Korean Air",     // 대한항공
+    AAR: "Asiana",         // 아시아나항공
+    JJA: "Jeju Air",       // 제주항공
+    JNA: "Jin Air",        // 진에어
+    ABL: "Air Busan",      // 에어부산
+    ASV: "Air Seoul",      // 에어서울
+    TWB: "Sonorous",       // 트리니티항공(구 티웨이항공) - 무선 콜사인이 2026.9.4에 "Teeway" -> "Sonorous"로 변경
+    ESR: "Eastar",         // 이스타항공 (실제 무선 콜사인은 "Eastar")
+    APZ: "Air Premia",     // 에어프레미아
+    EOK: "Aerohanguk",     // 에어로케이 (실제 무선 콜사인은 "Aerohanguk")
+    FGW: "Fly Gangwon",    // 플라이강원
+    AIH: "Air Incheon"     // 에어인천 (화물)
+  };
+
+  // 무선 교신용 숫자 발음(3=tree, 5=fife, 9=niner / 4는 TTS가 어색하게 읽어서 "four" 사용)
+  const PHONETIC_DIGITS = ["zero","one","two","tree","four","fife","six","seven","eight","niner"];
+  function digitsToSpeech(numStr){
+    return String(numStr).split('').map(ch => /\d/.test(ch) ? PHONETIC_DIGITS[+ch] : ch).join(' ').trim();
+  }
+  // 문자열 안의 숫자 덩어리만 골라 자릿수 발음으로 바꿔주는 함수 (게이트 번호 등)
+  function digitsInStringToSpeech(str){
+    return str.replace(/\d+/g, (m) => digitsToSpeech(m));
+  }
+
+  // 일반 숫자 단어(항속/풍속처럼 그룹으로 읽는 작은 숫자용)
+  const CARDINAL_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+  function cardinalWord(n){ return CARDINAL_WORDS[n] !== undefined ? CARDINAL_WORDS[n] : String(n); }
+
+  // 고도(피트) 발음: 5000 -> "five thousand" (18,000ft 미만은 천 단위로 읽는 실제 관례)
+  function altitudeToSpeech(n){
+    if (n % 1000 === 0 && n / 1000 <= 10) {
+      return `${cardinalWord(n / 1000)} thousand`;
+    }
+    return digitsToSpeech(String(n));
+  }
+
+  // 주파수 발음: "121.9" -> "one two one decimal niner", "119.05" -> "one one niner decimal zero fife"
+  function freqToSpeech(freqStr){
+    const [intPart, decPart] = String(freqStr).split('.');
+    return decPart
+      ? `${digitsToSpeech(intPart)} decimal ${digitsToSpeech(decPart)}`
+      : digitsToSpeech(intPart);
+  }
+
+  // 활주로 발음(자릿수 단위): "33L" -> "tree tree Left"
+  function runwayPhoneticSpeech(code){
+    if (/^\d+$/.test(code)) return digitsToSpeech(code);
+    const num = code.slice(0, -1);
+    const letter = code.slice(-1).toUpperCase();
+    const map = { L: "Left", R: "Right", C: "Center" };
+    return `${digitsToSpeech(num)} ${map[letter] || ""}`.trim();
+  }
+
+  // SID/STAR 명칭 발음: "UNBOK1" -> "Unbok One", "KAMIT2E" -> "Kamit Two Echo"
+  // (지점명 5자 내외 + 개정번호 숫자 1자리 + 트랜지션 문자(옵션))
+  // TTS가 어색하게 읽는 SID 지점명은 발음 철자로 교체
+  const SID_WORD_SPEECH = { Gwangju: "Gwang joo", Dongchon: "Dong chon", Dalseong: "Dal sung", Sooro: "Soo ro" };
+  function sidToSpeech(code){
+    const m = String(code).match(/^([A-Za-z]+)(\d)([A-Za-z]?)$/);
+    if (!m) return code;
+    const [, word, num, letter] = m;
+    let properWord = word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    properWord = SID_WORD_SPEECH[properWord] || properWord;
+    let out = `${properWord} ${cardinalWord(+num)}`;
+    if (letter) out += ` ${NATO_ALPHABET[letter.toUpperCase().charCodeAt(0) - 65]}`;
+    return out;
+  }
+
+  // 콜사인 발음: "KAL123" -> "Korean Air one two three"
+  //             "Korean Air 123" -> "Korean Air one two three" (이미 풀어쓴 경우 숫자만 변환)
+  function callsignToSpeech(raw){
+    if (!raw) return raw;
+    const trimmed = raw.trim();
+    const codeMatch = trimmed.match(/^([A-Za-z]{3})\s*(\d.*)$/);
+    if (codeMatch) {
+      const code = codeMatch[1].toUpperCase();
+      const airline = KOREAN_AIRLINE_CALLSIGNS[code];
+      if (airline) {
+        return `${airline} ${digitsInStringToSpeech(codeMatch[2])}`;
+      }
+    }
+    return digitsInStringToSpeech(trimmed);
+  }
+
+  // --------------------------------------------------------------
+  // [수정 사항 2] ICAO 코드 -> 실제 공항 이름 매핑
+  // --------------------------------------------------------------
+  // 사용자는 입력칸에 ICAO 코드(RKSI 등)를 넣지만, 실제 교신에서는
+  // 관제사도 조종사도 코드를 그대로 읽지 않고 공항 이름(Incheon 등)을
+  // 말합니다. 이 객체로 코드 -> 이름을 변환합니다.
+  // 매핑에 없는 코드를 입력한 경우에는 입력한 코드를 그대로 사용합니다.
+  const airportNames = {
+    RKSI: "Incheon",
+    RKSS: "Gimpo",
+    RKPC: "Jeju",
+    RKNY: "Yangyang",
+    RKTN: "Daegu",
+    RKJJ: "Gwangju",
+    RKTU: "Cheongju",
+    RKPK: "Gimhae",
+    RKPU: "Ulsan",
+    RKJY: "Yeosu",
+    RKPS: "Sacheon",
+    RKTH: "Pohang",
+    RKJK: "Gunsan"
+  };
+
+  // TTS가 읽기 어려운 공항명은 발음 철자로 바꿔서 읽게 함 (화면 표시는 그대로)
+  const airportSpeechNames = { Cheongju: "Chung joo", Gwangju: "Gwang joo", Gimhae: "Gim hay", Yeosu: "Yeo soo", Sacheon: "Sa chun", Gunsan: "Goon san" };
+  function airportSpeech(name){ return airportSpeechNames[name] || name; }
+  // 항공로 관제(En-route)는 한국에 인천 ACC / 대구 ACC 두 곳이 있어서
+  // 출발 공항에 따라 "Incheon Control" 또는 "Daegu Control"로 교신함.
+  // (공항별 담당은 대략적인 구분이며, 아래 표에서 바로 고칠 수 있음. 목록에 없으면 Incheon)
+  const enrouteControlNames = {
+    RKSI: "Incheon", RKSS: "Incheon", RKPC: "Incheon", RKJJ: "Incheon", RKTU: "Incheon",
+    RKTN: "Daegu",   RKNY: "Daegu",
+    RKPK: "Daegu",   RKPU: "Daegu",   RKJY: "Daegu",   RKPS: "Daegu",   RKTH: "Daegu",
+    RKJK: "Incheon"
+  };
+  function enrouteName(code){
+    return enrouteControlNames[code.toUpperCase()] || "Incheon";
+  }
+
+  function airportName(code){
+    return airportNames[code.toUpperCase()] || code;
+  }
+
+  function pickRandom(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // --------------------------------------------------------------
+  // requiredReadback / requiredRequest 항목은 두 가지 형태가 될 수 있습니다.
+  //   - 문자열 하나           : 그 문구가 그대로 포함되어야 정답
+  //   - 문자열들의 배열(대체) : 배열 안의 표현 중 "하나라도" 포함되면 정답
+  //     (예: 활주로 약어 허용 -> ["33 left", "33l", "33 l"])
+  // reqMatches()는 이 두 형태를 모두 처리해서 정답 여부를 판단하고,
+  // reqLabel()은 화면에 힌트로 보여줄 텍스트를 만들어줍니다.
+  // --------------------------------------------------------------
+  // ------------------------------------------------------------
+  // 말로 한 숫자/문자를 ATC가 알아듣게 변환
+  //   "one two one decimal niner" -> "121.9", "three three left" -> "33 left"
+  //   "five thousand" -> "5000", "bulti one tango" -> "bulti 1 t"
+  // 원래 입력과 변환본을 같이 비교해서 어느 쪽 표현이든 인정 (직접 입력에도 적용)
+  // ------------------------------------------------------------
+  const SPOKEN_DIGITS = { zero:"0", one:"1", two:"2", three:"3", tree:"3", four:"4", fower:"4",
+                          five:"5", fife:"5", six:"6", seven:"7", eight:"8", nine:"9", niner:"9",
+                          won:"1", too:"2", ate:"8" };   // 음성 인식이 자주 틀리는 동음이의어
+  const TENS_WORDS = { twenty:"20", thirty:"30", forty:"40", fifty:"50", sixty:"60", seventy:"70", eighty:"80", ninety:"90" };
+  const TEEN_WORDS = { ten:"10", eleven:"11", twelve:"12", thirteen:"13", fourteen:"14", fifteen:"15", sixteen:"16",
+                       seventeen:"17", eighteen:"18", nineteen:"19" };
+  function digitizeSpoken(text){
+    const cleaned = String(text).toLowerCase().replace(/(\d),(?=\d{3}\b)/g, '$1');   // "2,800" -> "2800"
+    const words = cleaned.replace(/[,;!?]/g, " ").split(/\s+/).filter(Boolean);
+    const out = [];   // { t: 문자열, run: 한 자리 숫자를 이어 붙이는 중인지, tens: 20~90 단어인지 }
+    for (let i = 0; i < words.length; i++) {
+      let w = words[i];
+      const prevWord = words[i - 1] || '';
+      const nextWord = words[i + 1] || '';
+      const isPrepTo = (w === 'to' || w === 'too') && (
+        /^(clear|cleared|taxi|taxing|proceed|climb|descend|vacate|vacated|fly|head|turn|go|report|contact|switch|change|give|way|gate|stand|ramp|apron|runway|rwy|land|jeju|gimpo|incheon|busan|gimhae|daegu|gwangju|cheongju|yangyang)$/.test(prevWord) ||
+        /^(land|gate|stand|ramp|apron|runway|rwy|the|jeju|gimpo|incheon|busan|gimhae|daegu|gwangju|cheongju|yangyang|departure|approach|tower|ground|control)$/.test(nextWord)
+      );
+      if (!isPrepTo && SPOKEN_DIGITS[w] !== undefined) w = SPOKEN_DIGITS[w];
+      let prev = out[out.length - 1];
+      // 숫자 근처의 "for"는 4, "oh"는 0으로 해석 (예: "squawk for one one three", "one oh one")
+      const nxt = words[i + 1];
+      const nextIsNum = nxt !== undefined && (SPOKEN_DIGITS[nxt] !== undefined || /^\d+$/.test(nxt) || TENS_WORDS[nxt] !== undefined);
+      const prevIsNum = !!(prev && prev.run && /\d$/.test(prev.t));
+      if (w === 'for' && (prevIsNum || nextIsNum)) w = '4';
+      if (w === 'oh' && (prevIsNum || nextIsNum)) w = '0';
+
+      if (TEEN_WORDS[w] !== undefined) {                                     // "thirteen" -> 13 (두 자리 묶음)
+        if (prev && prev.pair) { prev.t += TEEN_WORDS[w]; continue; }       // "forty one" + "thirteen" -> "4113"
+        if (prev && prev.run && prev.t.length === 1 && !/\./.test(prev.t)) { prev.t += TEEN_WORDS[w]; prev.pair = true; continue; }   // "one" + "twenty"류
+        out.push({ t: TEEN_WORDS[w], run: false, pair: true }); continue;
+      }
+      if (TENS_WORDS[w] !== undefined) { out.push({ t: TENS_WORDS[w], run: false, tens: true, pair: false }); continue; }   // "twenty"
+      if (/^(decimal|point|dot)$/.test(w) && prev && /\d$/.test(prev.t) && i + 1 < words.length) {
+        prev.t += "."; prev.run = true; continue;                    // "121" + decimal -> "121."
+      }
+      if (w === "thousand" && prev && /^\d+$/.test(prev.t)) {
+        prev.t += "000"; prev.run = false; prev.tens = false; continue;   // "5" + thousand -> "5000"
+      }
+      if (w === "hundred" && prev && /^\d+$/.test(prev.t) && parseInt(prev.t, 10) < 100) {
+        prev.t = String(parseInt(prev.t, 10) * 100); prev.run = false; prev.tens = false;   // "5" + hundred -> "500"
+        const pp = out[out.length - 2];
+        if (pp && /^\d+000$/.test(pp.t)) {                           // "2000" + "500" -> "2500"
+          pp.t = String(parseInt(pp.t, 10) + parseInt(prev.t, 10)); out.pop();
+        }
+        continue;
+      }
+      if (/^\d+$/.test(w)) {
+        if (prev && prev.tens && w.length === 1) {                   // "twenty" + "five" -> "25"
+          prev.t = String(parseInt(prev.t, 10) + parseInt(w, 10)); prev.tens = false; prev.pair = true;
+          // "one" + "twenty one" -> "121" (앞에 한 자리 숫자가 이어지는 경우)
+          const pp = out[out.length - 2];
+          if (pp && pp.run && pp.t.length === 1 && !/\./.test(pp.t)) { pp.t += prev.t; pp.pair = true; out.pop(); }
+          continue;
+        }
+        if (prev && prev.run && (w.length === 1 || /\.$/.test(prev.t))) { prev.t += w; continue; }   // "1 2 1" -> "121"
+        out.push({ t: w, run: w.length === 1 }); continue;
+      }
+      const idx = NATO_ALPHABET.findIndex(n => n.toLowerCase() === w);
+      if (idx >= 0 && prev && /^\d$/.test(prev.t)) {                  // SID 번호 뒤 문자: "1 tango" -> "1 t"
+        out.push({ t: String.fromCharCode(97 + idx), run: false }); continue;
+      }
+      out.push({ t: w, run: false });
+    }
+    return out.map(o => o.t).join(" ");
+  }
+  // ------------------------------------------------------------
+  // 한국어 인식(콩글리시) 대응: 한글로 받아 적힌 영어 발음을 영어 단어로 되돌림
+  //   예) "김포 그라운드 케이에이엘 원 투 쓰리 레디 포 푸시백"
+  //       -> "gimpo ground k a l one two three ready for pushback"
+  // ------------------------------------------------------------
+  const HANGUL_ENTRIES = [
+    ["zero","제로 지로"], ["one","원 완"], ["two","투"], ["three","쓰리 스리 뜨리 트리"], ["for","포 포어"],
+    ["five","파이브 화이브 파이프"], ["six","식스"], ["seven","세븐"], ["eight","에이트 에잇"], ["nine","나인"], ["niner","나이너"],
+    ["decimal","데시멀 데시말 데씨말 데스멀"], ["point","포인트"], ["thousand","사우전드 싸우전드"], ["hundred","헌드레드"],
+    ["alpha","알파 알퐈"], ["bravo","브라보"], ["charlie","찰리 차리"], ["delta","델타"], ["echo","에코 에꼬"], ["foxtrot","폭스트롯 폭스트로트"],
+    ["golf","골프"], ["hotel","호텔"], ["india","인디아"], ["juliett","줄리엣 줄리엣트"], ["kilo","킬로"], ["lima","리마"], ["mike","마이크"],
+    ["november","노벰버"], ["oscar","오스카"], ["papa","파파"], ["quebec","퀘벡 케벡"], ["romeo","로미오"], ["sierra","시에라"],
+    ["tango","탱고"], ["uniform","유니폼"], ["victor","빅터 빅토르"], ["whiskey","위스키"], ["x-ray","엑스레이"], ["yankee","양키"], ["zulu","줄루 쥴루"],
+    ["a","에이"], ["b","비"], ["c","씨"], ["d","디"], ["e","이"], ["f","에프"], ["g","지"], ["h","에이치"], ["i","아이"], ["j","제이"],
+    ["k","케이"], ["l","엘"], ["m","엠"], ["n","엔"], ["o","오"], ["p","피"], ["q","큐"], ["r","알"], ["s","에스"], ["t","티"],
+    ["v","브이"], ["w","더블유"], ["x","엑스"], ["y","와이"], ["z","제트"],
+    ["cleared","클리어드 클리어 클리얼드 클리얼"], ["runway","런웨이 런웨 란웨이"], ["via","비아"], ["departure","디파처 디파쳐 디파춰"],
+    ["squawk","스쿼크 스콱 스콰크 스퀘크 스쿼"], ["climb","클라임"], ["and","앤드 앤 엔드"], ["maintain","메인테인 메인텐 메인테이"],
+    ["flight","플라이트 플라잇"], ["level","레벨"], ["contact","컨택트 콘택트 컨택 콘택"], ["ground","그라운드 그라운"],
+    ["tower","타워"], ["approach","어프로치 어프로우치"], ["pushback","푸시백 푸쉬백 푸시벡"], ["taxiway","택시웨이 택시웨"], ["taxi","택시"],
+    ["hold","홀드"], ["short","쇼트 숏 쇼츠"], ["line","라인"], ["up","업"], ["wait","웨이트 웨잇 왜잇"], ["standby","스탠바이 스탠드바이 스텐바이"],
+    ["ready","레디 래디"], ["takeoff","테이크오프"], ["left","레프트"], ["right","라이트 라잇"], ["heading","헤딩"], ["turn","턴"],
+    ["request","리퀘스트"], ["requesting","리퀘스팅"], ["gate","게이트"], ["vacated","베이케이티드 베케이티드"], ["approaching","어프로칭"],
+    ["continue","컨티뉴 콘티뉴"], ["radar","레이더 레이다"], ["read back","리드백"], ["passing","패싱 패씽"], ["with","위드 윗"], ["you","유"],
+    ["good day","굿데이"], ["information","인포메이션"], ["clearance","클리어런스"], ["land","랜드"], ["feet","피트"], ["cancel","캔슬"],
+    ["restriction","리스트릭션"], ["speed","스피드"], ["knots","노츠 낫츠"], ["delivery","딜리버리 델리버리"], ["control","컨트롤 콘트롤"],
+    ["wind","윈드"], ["roger","로저"],
+    ["gimpo","김포"], ["incheon","인천"], ["jeju","제주"], ["gimhae","김해"], ["busan","부산"], ["daegu","대구"], ["gwangju","광주"],
+    ["cheongju","청주"], ["yangyang","양양"], ["ulsan","울산"], ["yeosu","여수"], ["sacheon","사천"], ["pohang","포항"], ["gunsan","군산"],
+    ["seoul","서울"], ["jungwon","중원"], ["gangneung","강릉"],
+    ["korean air","대한항공 코리안에어"], ["asiana","아시아나 아샤나 아시아나"], ["jeju air","제주에어 제주항공"], ["jin air","진에어"], ["air busan","에어부산"],
+    ["air seoul","에어서울"], ["sonorous","소노러스 소노로스"], ["eastar","이스타 이스타항공"], ["air premia","에어프레미아 에어프리미아"],
+    ["aero k","에어로케이"], ["aerohanguk","에어로한국"], ["fly gangwon","플라이강원"], ["air incheon","에어인천"],
+    ["vacated","베이케이티드 베케이트 비케이티드"], ["give way","기브웨이 기브 웨이"], ["boeing","보잉"], ["initially","이니셜리 이니셜"]
+  ];
+  const HANGUL_MAP = {};
+  HANGUL_ENTRIES.forEach(([en, ko]) => { String(ko).split(' ').filter(Boolean).forEach(k => { HANGUL_MAP[k] = en; }); });
+  const HANGUL_KEYS = Object.keys(HANGUL_MAP).sort((a, b) => b.length - a.length);   // 긴 단어부터 매칭
+
+  // 사전에 없는 한글은 소리 나는 대로 로마자로
+  const RR_CHO = ["g","kk","n","d","tt","r","m","b","pp","s","ss","","j","jj","ch","k","t","p","h"];
+  const RR_JUNG = ["a","ae","ya","yae","eo","e","yeo","ye","o","wa","wae","oe","yo","u","wo","we","wi","yu","eu","ui","i"];
+  const RR_JONG = ["","k","k","ks","n","nj","nh","t","l","lk","lm","lb","ls","lt","lp","lh","m","p","ps","t","t","ng","t","t","k","t","p","t"];
+  function romanizeSyllable(ch){
+    const code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) return ch;
+    return RR_CHO[Math.floor(code / 588)] + RR_JUNG[Math.floor((code % 588) / 28)] + RR_JONG[code % 28];
+  }
+  function hangulToEnglish(text){
+    if (!/[가-힣]/.test(text)) return text;
+    const src = String(text).replace(/([가-힣])\s+(?=[가-힣])/g, '$1');   // 한글 사이 띄어쓰기는 지우고 사전으로 다시 끊음
+    const out = [];
+    let unknown = '';
+    const flush = () => { if (unknown) { out.push(unknown); unknown = ''; } };
+    let i = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      if (/\s/.test(ch)) { flush(); i++; continue; }
+      if (/[가-힣]/.test(ch)) {
+        const key = HANGUL_KEYS.find(k => src.startsWith(k, i));
+        if (key) { flush(); out.push(HANGUL_MAP[key]); i += key.length; }
+        else { unknown += romanizeSyllable(ch); i++; }
+        continue;
+      }
+      flush();
+      let j = i;
+      while (j < src.length && !/[\s가-힣]/.test(src[j])) j++;
+      out.push(src.slice(i, j));
+      i = j;
+    }
+    flush();
+    return out.join(' ');
+  }
+
+  // 음성 인식이 자주 잘못 알아듣는 ATC 용어 교정
+  const MISHEARD_FIXES = [
+    [/\brun\s*away\b/g, 'runway'],
+    [/\b(squad|squat|squawks|squark|squarks|squach|skwak)\b/g, 'squawk'],
+    [/\bpush\s+back\b/g, 'pushback'],
+    [/\btake\s+off\b/g, 'takeoff'],
+    [/\bclear\s+(to|2|two|too)\b/g, 'cleared to'],
+    [/\bflight\s+(lever|live|levels|leval|lable)\b/g, 'flight level'],
+    [/\bread\s+(bag|bank|bat|beck)\b/g, 'read back'],
+    [/\bhold\s+(shot|shirt|shore|sure|shirts|shorts)\b/g, 'hold short'],
+    [/\blined?\s+up\s+(in|an|and|n)\s+(wait|weight|waits)\b/g, 'line up and wait'],
+    [/\b(decimel|decimals|decibel|decible|desimal|dessimal|the\s+seminal|the\s+cinema|the\s+simple)\b/g, 'decimal'],
+    [/\btax(i|ee)\s*(way|weigh|wey)\b/g, 'taxiway'],
+    [/\bstan\s+by\b/g, 'standby'],
+    [/\b(alfa|alpa)\b/g, 'alpha'],
+    [/\bready\s+for\s+(the\s+)?departures?\b/g, 'ready for departure'],
+    [/\b(miner|nina|nyner|ninor|niner's)\b/g, 'niner'],
+    [/\b(write|rite)\b/g, 'right'],
+    // 한국식 발음에서 실제로 확인된 오인식
+    [/\b(simple|kim\s*program|can\s*program|gym\s*po|kim\s*po|gim\s*po|kimpo|gimp\s*o)\s+(?=(ground|tower|delivery|departure|approach|control)\b)/g, 'gimpo '],
+    [/\bdecatur\b/g, 'ready for pushback'],
+    [/\b(in\s*chun|inchon|in\s*cheon)\b/g, 'incheon'],
+    [/\b(jay\s*joo|jejoo|jay\s*ju)\b/g, 'jeju'],
+    [/\b(kim\s*hay|gim\s*hay|kimhae)\b/g, 'gimhae'],
+    [/\b(day\s*goo|tae\s*goo|daegoo)\b/g, 'daegu'],
+    [/\b(kwangju|gwang\s*ju|kwang\s*joo)\b/g, 'gwangju'],
+    [/\b(chung\s*ju|chongju|chung\s*joo|cheong\s*ju)\b/g, 'cheongju'],
+    [/\blift\b/g, 'left'],
+    [/\b(fl\s*light|flight\s*level\s*to\s*for\s*zero|flight\s*level\s*two\s*for\s*zero)\b/g, 'flight level 240'],
+    [/\b(climb\s+in\s+maintain|climb\s+and\s+maintaining)\b/g, 'climb and maintain'],
+    [/\b(descend\s+in\s+maintain|descend\s+and\s+maintaining)\b/g, 'descend and maintain'],
+    [/\b(vacuum|vacate\s+it|vacating|vacate\s+the|vacate\s+to|vacate\s+in|ficated|ficate|ficated\s+the|ficated\s+in)\b/g, 'vacated'],
+    // 녹음에서 확인된 한국식 영어 발음 / 오인식 패턴 반영
+    [/\b(li\s*quest|le\s*quest|ri\s*quest|re\s*quest|li\s*questing|le\s*questing)\b/g, 'request'],
+    [/\b(we\s*information|with\s*in\s*formation|with\s+information)\b/g, 'with information'],
+    [/\b(fly\s*level|flight\s*level|fly\s*label|fl\s*level)\b/g, 'flight level'],
+    [/\b(no\s*pick|no\s*peak|no\s*pic|no\s*pig|lopik|nopik)\b/g, 'nopik'],
+    [/\b(uniform|you\s*need\s*form|uni\s*form)\b/g, 'uniform'],
+    [/\b(a\s*filed|as\s*file|as\s*filed|is\s*filed)\b/g, 'as filed'],
+    [/\b(squark|squad|squawk|scork|scwark)\b/g, 'squawk'],
+    [/\b(push\s*back|pushback|push\s*bag)\b/g, 'pushback'],
+    [/\b(approved|a\s*proved|approoved|op\s*proved)\b/g, 'approved'],
+    [/\b(lo\s*mew|lo\s*mu|lomew|romu|romew|rumu)\b/g, 'lomew'],
+    [/\b(take\s*off|takeoff|take\s*of)\b/g, 'takeoff'],
+    [/\b(through|thru|threw|true)\b(?=\s+(departure|climb|descend|approach))/g, 'through'],
+    [/\b(in\s*initially|initially|in\s*initial|initally)\b/g, 'initially'],
+    [/\b(turn\s+light|turn\s+right|turn\s+write)\b/g, 'turn right'],
+    [/\b(e\s*chang|in\s*chang|incheon|e\s*cheon)\b/g, 'incheon'],
+    [/\b(je\s*joo|jeju|jay\s*joo|je\s*ju)\b/g, 'jeju'],
+    [/\b(i\s*less|ils|i\s*l\s*s)\b/g, 'ils'],
+    [/\b(clear\s+to\s+land|clear\s+land|cleared\s+to\s+land|clear\s+to\s+ran)\b/g, 'cleared to land'],
+    [/\b(continue\s+approach|continue\s+approaching|continue\s+a\s*proach)\b/g, 'continue approach'],
+    [/\b(give\s+way|give\s+away|give\s+we)\b/g, 'give way'],
+    [/\b(continue\s+taxi|continue\s+taxing|continue\s+taxy)\b/g, 'continue taxi'],
+    [/\b(for\s*in|boeing|boing|b\s*7\s*3\s*7)\b/g, 'boeing']
+  ];
+  function fixMisheard(text){
+    let t = String(text).toLowerCase();
+    for (const [re, rep] of MISHEARD_FIXES) t = t.replace(re, rep);
+    return t;
+  }
+
+  // 소리가 비슷한 단어끼리 같은 값이 되도록 만드는 간단한 발음 키 (모음 제거, b/p·d/t·g/k 등 통일)
+  function soundKey(str){
+    const t = String(str).toLowerCase().replace(/[^a-z]/g, '');
+    if (!t) return '';
+    const map = { b:'p', d:'t', g:'k', c:'k', q:'k', v:'f', z:'s', m:'n', w:'', h:'' };
+    let out = '';
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      const isVowel = 'aeiouy'.includes(ch);
+      if (i > 0 && isVowel) continue;
+      const m = isVowel ? 'a' : (map[ch] !== undefined ? map[ch] : ch);
+      if (m && out[out.length - 1] !== m) out += m;
+    }
+    return out;
+  }
+
+  function buildMatchText(raw){
+    const lower = String(raw).toLowerCase();
+    const fixed = fixMisheard(lower);              // 자주 틀리는 용어 교정본
+    const parts = [lower, digitizeSpoken(lower), digitizeSpoken(fixed)];
+    if (/[가-힣]/.test(lower)) {                                          // 한국어 인식 결과
+      const en = fixMisheard(hangulToEnglish(lower));
+      parts.push(en, digitizeSpoken(en));
+    }
+    return parts.join(' | ');
+  }
+
+  // 음성으로 입력했을 때만 켜지는 "비슷한 발음 허용" 모드
+  let matchFuzzy = false;
+
+  // 편집 거리 (글자 몇 개가 다른지)
+  function lev(a, b){
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+  const fuzzyAllowed = (len) => (len < 5 ? 0 : len < 10 ? 1 : len < 16 ? 2 : 3);   // 허용 오타 글자 수
+
+  // 입력 속에 alt와 "거의 같은" 말이 있는지 (숫자는 반드시 정확히 일치해야 함)
+  function fuzzyIncludes(text, alt){
+    const altCompact = String(alt).replace(/[\s,\-]+/g, '');
+    const th = fuzzyAllowed(altCompact.length);
+    if (th === 0) return false;
+    const altDigits = altCompact.replace(/\D/g, '');
+    const altKey = soundKey(altCompact);
+    const soundOK = altKey.length >= 3;
+    for (const v of String(text).split(' | ')) {
+      const words = v.replace(/[^a-z0-9.\s']/g, ' ').split(/\s+/).filter(Boolean);
+      for (let i = 0; i < words.length; i++) {
+        let acc = '';
+        for (let k = 0; k < 7 && i + k < words.length; k++) {
+          acc += words[i + k];
+          if (acc.length > altCompact.length + th + 3) break;
+          if (Math.abs(acc.length - altCompact.length) <= th &&
+              acc.replace(/\D/g, '') === altDigits &&
+              lev(acc, altCompact) <= th) return true;
+          // 철자는 달라도 소리가 비슷하면 인정 (예: "bull tea" ~ "bulti")
+          if (soundOK && Math.abs(acc.length - altCompact.length) <= th + 3 &&
+              acc.replace(/\D/g, '') === altDigits) {
+            const ka = soundKey(acc), kb = altKey;
+            if (kb.length >= 3 && lev(ka, kb) <= (kb.length >= 6 ? 1 : 0)) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function reqMatches(normalizedInput, requirement){
+    // 객체형 요구사항 (예: 콜사인) : { label, test(text) }
+    if (requirement && !Array.isArray(requirement) && typeof requirement === 'object') {
+      return !!requirement.test(normalizedInput);
+    }
+    const alternatives = Array.isArray(requirement) ? requirement : [requirement];
+    // 공백/쉼표/하이픈 차이는 무시 (예: "KAL 123" = "kal123", "BULTI 1T" = "bulti1t")
+    const compact = (t) => String(t).replace(/[\s,\-]+/g, '');
+    const compactInput = compact(normalizedInput);
+    if (alternatives.some(alt => normalizedInput.includes(alt) || compactInput.includes(compact(alt)))) return true;
+    // 음성 입력: 비슷하게 들린 말도 인정
+    return matchFuzzy && alternatives.some(alt => fuzzyIncludes(normalizedInput, alt));
+  }
+  function reqLabel(requirement){
+    if (requirement && !Array.isArray(requirement) && typeof requirement === 'object') return requirement.label;
+    return Array.isArray(requirement) ? requirement.join(' / ') : requirement;
+  }
+
+  // 서로 다른 유도로 2개를 중복 없이 뽑는 함수
+  function pickTwoDistinctTaxiways(){
+    const shuffled = [...TAXIWAY_CODES].sort(() => Math.random() - 0.5);
+    return [shuffled[0], shuffled[1]];
+  }
+
+  // "33L" -> "33 Left" 처럼 활주로 코드를 실제 발음 형태로 바꿔주는 함수
+  function runwaySpoken(code){
+    if (/^\d+$/.test(code)) return code;               // L/R/C 없는 활주로 (예: "07")
+    const num = code.slice(0, -1);
+    const letter = code.slice(-1).toUpperCase();
+    const map = { L: "Left", R: "Right", C: "Center" };
+    return `${num} ${map[letter] || ""}`.trim();
+  }
+
+  // 랜덤 게이트 번호 (인천공항 게이트 번호대를 대략 흉내낸 두세 자리 숫자)
+  function pickGateNumber(){
+    return Math.floor(Math.random() * 260) + 10;   // 10 ~ 269
+  }
+
+  // --------------------------------------------------------------
+  // [수정 사항 1] 활주로 약어 매칭
+  // --------------------------------------------------------------
+  // 사용자가 "runway 33 left"처럼 풀어 쓰지 않고 "33l" 같은 약어로
+  // 입력해도 정답으로 인정하기 위한 함수입니다.
+  //
+  // code       : 활주로 코드 원본 (예: "33L")
+  // spokenWord : runwaySpoken(code)의 결과 (예: "33 Left")
+  //
+  // 이 함수는 사용자의 정답 문구를 "여러 개의 허용 가능한 표현"으로
+  // 이루어진 배열로 만들어 반환합니다. 이후 정답 체크 로직에서
+  // 이 배열 중 하나라도 포함되어 있으면 정답으로 처리합니다.
+  function runwayAcceptedForms(code){
+    if (/^\d+$/.test(code)) {                          // L/R/C 없는 활주로: "07" 또는 "7"
+      const forms = [code];
+      if (code.startsWith("0")) forms.push(`runway ${code.slice(1)}`);
+      return forms;
+    }
+    const spoken = runwaySpoken(code).toLowerCase();      // "33 left"
+    const compact = code.toLowerCase();                   // "33l"
+    const compactSpaced = `${code.slice(0, -1)} ${code.slice(-1)}`.toLowerCase(); // "33 l"
+    return [spoken, compact, compactSpaced];
+  }
+
+  // --------------------------------------------------------------
+  // [수정 사항 2] 랜덤 푸시백 지시 생성
+  // --------------------------------------------------------------
+  // 약 50% 확률로 방향/거리/위치 정보가 덧붙는 "복잡한" 푸시백 지시를
+  // 만들어냅니다. 나머지 50%는 기본적인 "Pushback approved." 만 나옵니다.
+  const PUSHBACK_DIR1 = ["face north", "face south", "face east", "face west", "face northeast", "face southwest"];
+  const PUSHBACK_DIR2 = ["tail left", "tail right"];
+  const PUSHBACK_LENGTH = ["make a short pushback", "make a long pushback"];
+
+  function buildPushbackInstruction(){
+    // 50% 확률로 단순 지시("Pushback approved.")만 나가도록 분기합니다.
+    if (Math.random() < 0.5) {
+      return "Pushback approved.";
+    }
+
+    // ---- 여기부터는 "복잡한" 지시를 조립하는 부분입니다 ----
+    const parts = [];
+
+    // 방향 변수 1 (face north 등) - 60% 확률로 포함
+    if (Math.random() < 0.6) {
+      parts.push(pickRandom(PUSHBACK_DIR1));
+    }
+
+    // 방향 변수 2 (tail left/right) - 40% 확률로 포함
+    if (Math.random() < 0.4) {
+      parts.push(pickRandom(PUSHBACK_DIR2));
+    }
+
+    // 거리/위치 변수 - 70% 확률로 포함
+    // "make a long pushback" 뒤에 "abeam to gate 24"가 덧붙기도 합니다.
+    if (Math.random() < 0.7) {
+      let lengthPhrase = pickRandom(PUSHBACK_LENGTH);
+      if (Math.random() < 0.5) {
+        lengthPhrase += ` abeam to gate ${pickGateNumber()}`;
+      }
+      parts.push(lengthPhrase);
+    }
+
+    // 위의 확률 분기에서 하나도 뽑히지 않았을 경우를 대비해
+    // 최소 하나는 무조건 들어가도록 보정합니다.
+    if (parts.length === 0) {
+      parts.push(pickRandom(PUSHBACK_DIR1));
+    }
+
+    return `Pushback approved, ${parts.join(", ")}.`;
+  }
+
+  // ==================================================================
+  // 항공편 정보 + 이번 비행에 무작위로 배정된 활주로/유도로/ATIS
+  // ==================================================================
+  let flight = { callsign: "", dep: "RKSI", dest: "" };
+  let assigned = {};   // { depRunway, depRunwaySpoken, taxiways, taxiwaySpoken, arrRunway, arrRunwaySpoken, atis }
+
+  function generateAssignments(){
+    // 출발/도착 공항의 실제 활주로 중에서 각각 무작위 배정
+    const depRunway = pickRandom(departureRunwaysFor(flight.dep));
+    const sid = sidFor(flight.dep, depRunway);          // 예: "KAMIT2E" (없으면 null -> radar vector)
+    const taxiwayCodes = pickTwoDistinctTaxiways();
+    // 같은 공항을 출발·도착으로 고른 경우에만 출발 활주로와 겹치지 않게 선택
+    let arrPool = runwaysFor(flight.dest);
+    if (flight.dep === flight.dest && arrPool.length > 1) arrPool = arrPool.filter(r => r !== depRunway);
+    const arrRunway = pickRandom(arrPool);
+
+    return {
+      depRunway,
+      sid,
+      depRunwaySpoken: runwaySpoken(depRunway),
+      depRunwaySpeech: runwayPhoneticSpeech(depRunway),
+      taxiwayCodes,
+      taxiwaySpoken: taxiwayCodes.map(c => TAXIWAY_PHONETIC[c]),
+      arrRunway,
+      arrRunwaySpoken: runwaySpoken(arrRunway),
+      arrRunwaySpeech: runwayPhoneticSpeech(arrRunway),
+      atis: pickRandom(NATO_ALPHABET),
+      cruiseFL: pickRandom(["FL240", "FL280", "FL300"]),     // 순항고도
+      squawk: randomSquawk(),                                // 트랜스폰더 코드
+      depWind: windFor(depRunway),                           // 이륙 시 바람
+      arrWind: windFor(arrRunway),                           // 착륙 시 바람
+      passingAlt: pickRandom([2300, 2500, 2800, 3000, 3200]),// 디파처 첫 교신 시 통과 고도(ft)
+      ctlPassing: pickRandom(["FL150", "FL170", "FL190"]),   // 항공로 관제 첫 교신 시 통과 고도
+      arrGate: pickGateNumber(),                             // 도착 게이트 번호
+      gate: pickGateNumber(),                       // [수정 사항 2] 게이트 번호
+      pushbackMessage: buildPushbackInstruction()    // [수정 사항 2] 랜덤 푸시백 지시문
+    };
+  }
+
+  // ==================================================================
+  // 강의 자료(Fly with Deekay) 기반 교신 흐름용 데이터/헬퍼
+  // ==================================================================
+
+  // 공항별 주파수 (IVAO 한국 지부 자료 + 강의 자료 기준의 대략값, 실제와 다를 수 있음)
+  const AIRPORT_FREQS = {
+    RKSI: { del: "121.600", gnd: "121.700", twr: "118.200", dep: "119.750", app: "124.200" },
+    RKSS: { del: "121.975", gnd: "121.900", twr: "118.100", dep: "119.750", app: "124.200" },
+    RKPC: { del: "121.925", gnd: "121.675", twr: "118.550", dep: "119.225", app: "121.200" },
+    RKNY: { del: "124.300", gnd: "124.300", twr: "118.850", dep: "124.600", app: "124.600" },
+    RKTN: { del: "121.950", gnd: "121.950", twr: "126.200", dep: "120.250", app: "135.900" },
+    RKJJ: { del: "121.800", gnd: "121.800", twr: "118.050", dep: "124.000", app: "120.475" },
+    RKTU: { del: "121.875", gnd: "121.875", twr: "118.700", dep: "129.650", app: "134.000" },
+    RKPK: { del: "121.800", gnd: "121.900", twr: "118.100", dep: "125.500", app: "125.500" },
+    RKPU: { del: "121.750", gnd: "121.750", twr: "118.750", dep: "120.200", app: "124.250" },
+    RKJY: { del: "118.525", gnd: "118.525", twr: "122.500", dep: "135.400", app: "135.400" },
+    RKPS: { del: "126.200", gnd: "126.200", twr: "126.200", dep: "135.400", app: "135.400" },
+    RKTH: { del: "126.200", gnd: "126.200", twr: "118.050", dep: "120.200", app: "124.250" },
+    RKJK: { del: "133.750", gnd: "123.500", twr: "126.500", dep: "124.100", app: "124.100" }
+  };
+  function freqsFor(code){ return AIRPORT_FREQS[String(code).toUpperCase()] || AIRPORT_FREQS.RKSI; }
+  // 항공로 관제 주파수 (Incheon은 강의 자료 예시 기준)
+  const CONTROL_FREQS = { Incheon: "128.325", Daegu: "122.750" };
+  // 주파수 문구 표기: "121.900" -> "121.9", "119.050" -> "119.05"
+  function fx(freq){ return String(freq).replace(/0+$/, "").replace(/\.$/, ""); }
+
+  // 접근/출발 관제 호출명 (강의 자료: 김포 -> "Seoul Departure")
+  const TMA_NAMES = { RKSI: "Incheon", RKSS: "Seoul", RKPC: "Jeju", RKNY: "Gangneung", RKTN: "Daegu", RKJJ: "Gwangju", RKTU: "Jungwon",
+    RKPK: "Gimhae", RKPU: "Pohang", RKJY: "Sacheon", RKPS: "Sacheon", RKTH: "Pohang", RKJK: "Gunsan" };
+  function tmaName(code){ return TMA_NAMES[String(code).toUpperCase()] || airportName(code); }
+
+  // "Jeju International Airport" 형태의 정식 이름 (광주는 국내선 공항)
+  function fullAirportName(code, forSpeech){
+    const n = airportName(code);
+    if (n === String(code).toUpperCase()) return n;     // 목록에 없는 공항 코드는 그대로
+    const shown = forSpeech ? airportSpeech(n) : n;
+    const domestic = ["RKJJ", "RKPU", "RKJY", "RKPS", "RKTH", "RKJK"];   // "International"이 붙지 않는 공항
+    return domestic.includes(String(code).toUpperCase()) ? `${shown} Airport` : `${shown} International Airport`;
+  }
+
+  // 활주로에 맞춰 정풍 위주의 바람 생성 (예: 활주로 07 -> 바람 070 근처)
+  function windFor(rwy){
+    const base = (parseInt(rwy, 10) || 36) * 10;
+    let dir = base + pickRandom([-30, -20, -10, 0, 10, 20, 30]);
+    dir = ((dir - 1 + 360) % 360) + 1;
+    return { dir: String(dir).padStart(3, "0"), spd: Math.floor(Math.random() * 7) + 3 };   // 3~9kt
+  }
+
+  // 트랜스폰더 코드(국내선 4101~4177 범위, 각 자리 0~7)
+  function randomSquawk(){
+    let s;
+    do { s = `41${Math.floor(Math.random() * 8)}${Math.floor(Math.random() * 8)}`; } while (s === "4100");
+    return s;
+  }
+
+  // 콜사인 허용 표현: "KAL123" <-> "Korean Air 123"
+  function callsignForms(raw){
+    const low = String(raw).trim().toLowerCase();
+    const forms = new Set([low]);
+    const m = low.match(/^([a-z]{3})\s*(\d+)$/);
+    if (m && KOREAN_AIRLINE_CALLSIGNS[m[1].toUpperCase()]) {
+      forms.add(`${KOREAN_AIRLINE_CALLSIGNS[m[1].toUpperCase()].toLowerCase()} ${m[2]}`);
+    }
+    for (const [code, name] of Object.entries(KOREAN_AIRLINE_CALLSIGNS)) {
+      const n = name.toLowerCase();
+      if (low.startsWith(n)) {
+        const rest = low.slice(n.length).trim();
+        if (/^\d+/.test(rest)) forms.add(`${code.toLowerCase()}${rest}`);
+      }
+    }
+    return [...forms];
+  }
+
+  // 택시웨이 복창: "taxiway alpha bravo" / "taxiway A B" / "taxiway alpha, taxiway bravo" 모두 인정
+  function makeTaxiwayRequirement(spokenNames){
+    const letters = spokenNames.map(n => n.charAt(0).toLowerCase());
+    const natoToLetter = {};
+    NATO_ALPHABET.forEach(n => { natoToLetter[n.toLowerCase().replace(/[^a-z]/g, '')] = n.charAt(0).toLowerCase(); });
+    natoToLetter.alfa = 'a'; natoToLetter.juliet = 'j';              // 자주 쓰는 다른 철자
+    return {
+      label: `taxiway ${spokenNames[0].toLowerCase()} ${spokenNames[1].toLowerCase()} (또는 taxiway ${letters[0].toUpperCase()} ${letters[1].toUpperCase()})`,
+      test(text){
+        for (const v of String(text).split(' | ')) {
+          const words = v.replace(/taxi\s+way/g, 'taxiway').replace(/[^a-z\s'-]/g, ' ').split(/\s+/).filter(Boolean);
+          const seq = [];
+          let inTaxi = false;
+          for (const w of words) {
+            if (w === 'taxiway' || w === 'taxiways') { inTaxi = true; continue; }
+            if (!inTaxi) continue;
+            const key = w.replace(/[^a-z]/g, '');
+            if (natoToLetter[key] !== undefined) seq.push(natoToLetter[key]);
+            else if (/^[a-z]$/.test(key)) seq.push(key);
+            else if (key === 'then' || key === 'and' || key === 'via') continue;
+            else inTaxi = false;
+          }
+          if (seq.join('').includes(letters.join(''))) return true;
+        }
+        return false;
+      }
+    };
+  }
+
+  // "passing" 뒤에 고도 숫자만 있으면 정답 (1000이든 2500이든 FL150이든 상관없음)
+  function makePassingRequirement(label){
+    return {
+      label,
+      test(text){
+        return String(text).split(' | ').some(v =>
+          /passing\s+(?:through\s+|at\s+)?(?:flight\s*level\s*|fl\s*)?\d{3,5}/.test(v));
+      }
+    };
+  }
+
+  // 음성 인식이 잘 못 알아듣는 콜사인 이름의 비슷한 발음 모음 (영문 소문자)
+  const CALLSIGN_ALIASES = {
+    "kal":        ["clear", "cleaner", "call", "cal", "kel", "kyle"],
+    "aerohanguk": ["aero hanguk", "aero hangook", "aero hankuk", "aero hankook", "aero han guk", "aero hangul", "aero k", "air hanguk", "aero hanuk", "aero han kuk"],
+    "sonorous":   ["sonorus", "sonoros", "sono rus", "so no rus", "sonoras", "sonorus air", "sonar us", "sonora us", "sonorous air"],
+    "eastar":     ["east star", "easter", "ee star", "eastar jet"],
+    "jin air":    ["gin air", "jean air", "jinair"],
+    "jeju air":   ["jejuair", "jay joo air", "jeju er", "je ju air"],
+    "air busan":  ["air pusan", "air bu san", "airbusan"],
+    "air seoul":  ["air soul", "air sole", "airseoul"],
+    "air premia": ["air premier", "air primia", "air premium"],
+    "asiana":     ["asian a", "ashiana", "a siana", "aciana", "asians", "asian", "aziana", "oshiana", "ashana"],
+    "korean air": ["korea air", "korean er", "koreanair"],
+    "fly gangwon":["fly kangwon", "fly gang won"],
+    "air incheon":["air inchon", "air in chon"]
+  };
+
+  // 콜사인 요구사항: 정확히 말하거나, 비슷한 발음 + 편명 숫자가 맞으면 인정
+  //   예) EOK456 -> "aerohanguk 456", "aero hang guk 456", "e o k 456" 모두 OK
+  function makeCallsignRequirement(raw){
+    const forms = callsignForms(raw);
+    const low = String(raw).trim().toLowerCase();
+    let names = [], number = null;
+    const m = low.match(/^([a-z]{3})\s*(\d+)$/);
+    const byCode = m && KOREAN_AIRLINE_CALLSIGNS[m[1].toUpperCase()];
+    if (m && byCode) { names = [byCode.toLowerCase(), m[1]]; number = m[2]; }
+    else {
+      for (const [code, name] of Object.entries(KOREAN_AIRLINE_CALLSIGNS)) {
+        const n = name.toLowerCase();
+        if (low.startsWith(n)) {
+          const rest = low.slice(n.length).trim();
+          if (/^\d+$/.test(rest)) { names = [n, code.toLowerCase()]; number = rest; break; }
+        }
+      }
+      if (!number) {
+        const m2 = low.match(/^(.*?)\s*(\d+)$/);
+        if (m2 && m2[1]) { names = [m2[1]]; number = m2[2]; }
+      }
+    }
+    names = [...new Set(names.flatMap(n => [n, ...(CALLSIGN_ALIASES[n] || [])]).map(n => n.replace(/[^a-z]/g, '')).filter(Boolean))];
+
+    return {
+      label: forms.join(' / '),
+      test(text){
+        if (forms.some(f => reqMatches(text, f))) return true;
+        if (!number || !names.length) return false;
+        for (const v of String(text).split(' | ')) {
+          const words = v.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+          for (let j = 0; j < words.length; j++) {
+            if (!(words[j] === number || (words[j].length > number.length && words[j].endsWith(number)))) continue;
+            for (let k = 1; k <= 4 && j - k >= 0; k++) {          // 편명 앞의 1~4단어를 이어 붙여 비교
+              const cand = words.slice(j - k, j).join('');
+              if (names.some(n => lev(cand, n) <= (n.length <= 3 ? 0 : Math.max(1, Math.floor(n.length / 4))))) return true;
+            }
+          }
+        }
+        return false;
+      }
+    };
+  }
+
+  // 조종사가 말하는 모든 문장에 콜사인이 들어가야 하는지 (강의 팁: 리드백 마지막에 콜사인)
+  const REQUIRE_CALLSIGN = true;
+
+  // ------------------------------------------------------------
+  // 시나리오 데이터 (교신 흐름) - 강의 자료 순서
+  //   Delivery -> Ground -> Tower(이륙) -> Departure -> Control
+  //   -> Approach -> Tower(착륙) -> Ground(도착)
+  // 각 stage는 하나 이상의 "exchange(교신 한 세트)"로 구성됩니다.
+  //   - pilot_first : 조종사가 먼저 요청 -> ATC 응답 -> 조종사 복창
+  //   - atc_first   : ATC가 먼저 지시 -> 조종사 복창
+  // ------------------------------------------------------------
+  function buildStages(f, a){
+    const C = f.callsign;                                         // 화면 표시용 콜사인
+    const cs = f.callsignSpeech || callsignToSpeech(f.callsign);  // 음성용 콜사인
+
+    const depName  = airportName(f.dep),  destName  = airportName(f.dest);
+    const depSp    = airportSpeech(depName), destSp = airportSpeech(destName);
+    const destKeyword = destName.toLowerCase();
+    const fullDest = fullAirportName(f.dest), fullDestSp = fullAirportName(f.dest, true);
+
+    const frD = freqsFor(f.dep), frA = freqsFor(f.dest);
+    const depTma = tmaName(f.dep),  destTma = tmaName(f.dest);
+    const depTmaSp = airportSpeech(depTma), destTmaSp = airportSpeech(destTma);
+
+    const ctrlCity = enrouteName(f.dep);
+    const ctrlName = `${ctrlCity} Control`;
+    const ctrlFreq = CONTROL_FREQS[ctrlCity] || CONTROL_FREQS.Incheon;
+
+    const fl = a.cruiseFL;                       // 예: "FL240"
+    const flNum = fl.slice(2);
+    const flAlts = [`fl${flNum}`, `flight level ${flNum}`];
+    const flSpeech = `flight level ${digitsToSpeech(flNum)}`;
+
+    const sidWord = a.sid ? a.sid.match(/^[A-Za-z]+/)[0] : null;                 // "BULTI"
+    const sidWordCap = sidWord ? sidWord.charAt(0) + sidWord.slice(1).toLowerCase() : null;
+    const sidWordSp = sidWordCap ? (SID_WORD_SPEECH[sidWordCap] || sidWordCap) : null;
+    const sidReq = a.sid ? a.sid.toLowerCase() : "radar vector";
+
+    const depRwyAlts = runwayAcceptedForms(a.depRunway);
+    const arrRwyAlts = runwayAcceptedForms(a.arrRunway);
+    const rnd = (n) => Math.floor(Math.random() * n);
+
+    // "contact ..." 주파수 이전 지시를 별도 장면으로 분리
+    function contactExchange(facility, freq, suffix = "", facilitySp = facility){
+      return {
+        type: "atc_first",
+        sceneLabel: "CONTACT",
+        atcMessage: `${C}, contact ${facility} ${freq}${suffix}.`,
+        atcSpeech: `${cs}, contact ${facilitySp} ${freqToSpeech(freq)}${suffix}.`,
+        requiredReadback: [`contact ${facility.toLowerCase()}`, freq]
+      };
+    }
+
+    // ---------------- 1. CLEARANCE DELIVERY ----------------
+    const clrText = a.sid
+      ? `cleared to ${fullDest}, departure runway ${a.depRunwaySpoken} via ${a.sid} departure, ${sidWord} then as filed. Climb and maintain ${fl}, departure frequency ${fx(frD.dep)}, squawk ${a.squawk}, read back.`
+      : `cleared to ${fullDest}, departure runway ${a.depRunwaySpoken}, radar vector departure. Climb and maintain ${fl}, departure frequency ${fx(frD.dep)}, squawk ${a.squawk}, read back.`;
+    const clrSpeech = a.sid
+      ? `cleared to ${fullDestSp}, departure runway ${a.depRunwaySpeech} via ${sidToSpeech(a.sid)} departure, ${sidWordSp} then as filed. Climb and maintain ${flSpeech}, departure frequency ${freqToSpeech(fx(frD.dep))}, squawk ${digitsToSpeech(a.squawk)}, read back.`
+      : `cleared to ${fullDestSp}, departure runway ${a.depRunwaySpeech}, radar vector departure. Climb and maintain ${flSpeech}, departure frequency ${freqToSpeech(fx(frD.dep))}, squawk ${digitsToSpeech(a.squawk)}, read back.`;
+    const clrReadback = [`cleared to ${destKeyword}`, depRwyAlts, sidReq, flAlts, fx(frD.dep), `squawk ${a.squawk}`];
+
+    const requestExchange = {
+      type: "pilot_first",
+      prompt: `${depName} Delivery를 호출해 IFR 비행 허가를 요청하세요.\n(콜사인 + requesting IFR clearance to 도착 공항 + 순항고도(생략 가능) + ATIS information)\n예: "${depName} Delivery, ${C} requesting IFR clearance to ${fullDest}, ${fl} with Information ${a.atis}."`,
+      requiredRequest: [["requesting ifr clearance", "requesting atc clearance", "requesting clearance"], destKeyword,
+                        [`information ${a.atis.toLowerCase()}`, `information ${a.atis.charAt(0).toLowerCase()}`]]
+    };
+    const clearanceExchange = {
+      type: "atc_first",
+      atcMessage: `${C}, ${clrText}`,
+      atcSpeech: `${cs}, ${clrSpeech}`,
+      requiredReadback: clrReadback
+    };
+
+    const deliveryRoll = Math.random();
+    let deliveryExchanges;
+    if (deliveryRoll < 0.25) {
+      // 관제사가 먼저 부르는 경우: "clearance ready, ready to copy?"
+      deliveryExchanges = [
+        { type: "atc_first",
+          atcMessage: `${C}, ${depName} Delivery, clearance ready, ready to copy?`,
+          atcSpeech: `${cs}, ${depSp} Delivery, clearance ready, ready to copy?`,
+          requiredReadback: [["go ahead"]] },
+        clearanceExchange
+      ];
+    } else if (deliveryRoll < 0.45) {
+      // 대기해야 하는 경우: "standby for your clearance, you're number X"
+      const n = rnd(3) + 2;
+      deliveryExchanges = [
+        { ...requestExchange,
+          atcMessage: `${C}, standby for your clearance, you're number ${n}.`,
+          atcSpeech: `${cs}, standby for your clearance, you're number ${cardinalWord(n)}.`,
+          requiredReadback: [["stand by", "standby"], `number ${n}`] },
+        clearanceExchange
+      ];
+    } else {
+      deliveryExchanges = [{ ...requestExchange, atcMessage: clearanceExchange.atcMessage,
+                             atcSpeech: clearanceExchange.atcSpeech, requiredReadback: clrReadback }];
+    }
+    deliveryExchanges.push({
+      type: "atc_first",
+      atcMessage: `${C}, read back is correct, report when ready for pushback.`,
+      atcSpeech: `${cs}, read back is correct, report when ready for pushback.`,
+      requiredReadback: ["report when ready for pushback"]
+    });
+    // 클리어런스 딜리버리와 그라운드 주파수가 같은 공항은 "contact Ground" 장면을 생략
+    if (frD.del !== frD.gnd) deliveryExchanges.push(contactExchange("Ground", fx(frD.gnd)));
+
+    // ---------------- 3. TOWER(이륙) 바람 / 4. DEPARTURE 지시 ----------------
+    const w1 = a.depWind;
+    const passing = a.passingAlt;
+
+    // 출발 관제의 추가 지시 (강의 자료 '디파쳐의 여러가지 지시사항' 중 하나)
+    const climbViaSid = !!a.sid && Math.random() < 0.35;
+    let depInstr = null;
+    if (!climbViaSid) {
+      const kind = pickRandom(["heading", "restriction", "restrictionSpeed"]);
+      if (kind === "heading") {
+        const hdg = String((rnd(36) + 1) * 10).padStart(3, "0");
+        const side = pickRandom(["left", "right"]);
+        depInstr = {
+          type: "atc_first",
+          atcMessage: `${C}, turn ${side} heading ${hdg}.`,
+          atcSpeech: `${cs}, turn ${side} heading ${digitsToSpeech(hdg)}.`,
+          requiredReadback: [[...new Set([`heading ${hdg}`, `heading ${Number(hdg)}`])]]
+        };
+      } else if (kind === "restrictionSpeed") {
+        depInstr = {
+          type: "atc_first",
+          atcMessage: `${C}, cancel level and speed restriction, climb and maintain ${fl}.`,
+          atcSpeech: `${cs}, cancel level and speed restriction, climb and maintain ${flSpeech}.`,
+          requiredReadback: [["cancel level and speed restriction", "cancel altitude and speed restriction"], flAlts]
+        };
+      } else {
+        depInstr = {
+          type: "atc_first",
+          atcMessage: `${C}, cancel level restriction, climb to ${fl}.`,
+          atcSpeech: `${cs}, cancel level restriction, climb to ${flSpeech}.`,
+          requiredReadback: [["cancel level restriction", "cancel altitude restriction"], flAlts]
+        };
+      }
+    }
+
+    const departureExchanges = [
+      {
+        type: "pilot_first",
+        prompt: `${depTma} Departure를 호출하세요. (인사 + 콜사인 with you + passing 통과 고도(숫자는 자유: 1000, 2500 등)${a.sid ? " + SID 이름" : ""})\n예: "${depTma} Departure, Good day, ${C} with you, passing ${passing} feet${a.sid ? `, ${a.sid} departure` : ""}."`,
+        requiredRequest: [`${depTma.toLowerCase()} departure`, makePassingRequirement('passing 고도 (예: passing 2500 feet)')].concat(a.sid ? [a.sid.toLowerCase()] : []),
+        atcMessage: climbViaSid
+          ? `${C}, ${depTma} Departure, radar contact. Climb via SID, climb and maintain ${fl}.`
+          : `${C}, ${depTma} Departure, radar contact. Climb and maintain ${fl} initially.`,
+        atcSpeech: climbViaSid
+          ? `${cs}, ${depTmaSp} Departure, radar contact. Climb via SID, climb and maintain ${flSpeech}.`
+          : `${cs}, ${depTmaSp} Departure, radar contact. Climb and maintain ${flSpeech} initially.`,
+        requiredReadback: climbViaSid
+          ? [["climb via sid", "follow sid"], flAlts]
+          : ["climb and maintain", flAlts]
+      }
+    ];
+    if (depInstr) departureExchanges.push(depInstr);
+    departureExchanges.push(contactExchange(ctrlName, fx(ctrlFreq), ", good day"));
+
+    // ---------------- 7. TOWER(착륙) ----------------
+    const w2 = a.arrWind;
+    const ilsAlts = arrRwyAlts.flatMap(w => [`ils ${w}`, `ils runway ${w}`, `approaching ${w}`, `approaching runway ${w}`]);
+    const landingExchanges = [
+      {
+        type: "pilot_first",
+        prompt: `${destName} Tower를 호출해 접근 중임을 알리세요. (콜사인 + ILS 활주로 또는 approaching 활주로)\n예: "${destName} Tower, ${C}, ILS ${a.arrRunwaySpoken}." 또는 "...approaching runway ${a.arrRunwaySpoken}."`,
+        requiredRequest: [[`${destKeyword} tower`, `${destKeyword} twr`], ilsAlts],
+        atcMessage: `${C}, continue approach.`,
+        atcSpeech: `${cs}, continue approach.`,
+        requiredReadback: ["continue approach"]
+      }
+    ];
+    if (Math.random() < 0.4) {
+      const spd = pickRandom([160, 170, 180]);
+      landingExchanges.push({
+        type: "atc_first",
+        atcMessage: `${C}, maintain ${spd}kt until 5 DME.`,
+        atcSpeech: `${cs}, maintain ${digitsToSpeech(String(spd))} knots until five DME.`,
+        requiredReadback: [`maintain ${spd}`, "5 dme"]
+      });
+    }
+    const vacateSide = pickRandom(["left", "right"]);
+    landingExchanges.push(
+      {
+        type: "atc_first",
+        atcMessage: `${C}, wind ${w2.dir} at ${w2.spd}, runway ${a.arrRunwaySpoken}, cleared to land.`,
+        atcSpeech: `${cs}, wind ${digitsToSpeech(w2.dir)} at ${cardinalWord(w2.spd)}, runway ${a.arrRunwaySpeech}, cleared to land.`,
+        requiredReadback: [arrRwyAlts, "cleared to land"]
+      },
+      {
+        type: "atc_first",
+        atcMessage: `${C}, welcome to ${destName}, vacate runway ${a.arrRunwaySpoken} to the ${vacateSide}.`,
+        atcSpeech: `${cs}, welcome to ${destSp}, vacate runway ${a.arrRunwaySpeech} to the ${vacateSide}.`,
+        requiredReadback: ["vacate", vacateSide]
+      },
+      {
+        type: "pilot_first",
+        prompt: `활주로를 벗어났습니다. 타워에 보고하세요.\n예: "${destName} Tower, ${C}, vacated runway ${a.arrRunwaySpoken}."`,
+        requiredRequest: ["vacated", arrRwyAlts],
+        sceneLabel: "CONTACT",
+        atcMessage: `${C}, contact Ground ${fx(frA.gnd)}.`,
+        atcSpeech: `${cs}, contact Ground ${freqToSpeech(fx(frA.gnd))}.`,
+        requiredReadback: ["contact ground", fx(frA.gnd)]
+      }
+    );
+
+    // ---------------- 8. GROUND(도착) ----------------
+    const gateStr = String(a.arrGate);
+    const arrGroundExchanges = [];
+    if (Math.random() < 0.5) {
+      arrGroundExchanges.push(
+        {
+          type: "pilot_first",
+          prompt: `${destName} Ground를 호출해 택시를 요청하세요.\n예: "${destName} Ground, ${C}, request taxi to gate."`,
+          requiredRequest: [["request taxi"]],
+          atcMessage: `${C}, ${destName} Ground, say your gate number?`,
+          atcSpeech: `${cs}, ${destSp} Ground, say your gate number?`,
+          requiredReadback: [`gate ${gateStr}`]
+        },
+        {
+          type: "atc_first",
+          atcMessage: `${C}, taxi to gate ${gateStr}.`,
+          atcSpeech: `${cs}, taxi to gate ${digitsToSpeech(gateStr)}.`,
+          requiredReadback: ["taxi to gate", `gate ${gateStr}`]
+        }
+      );
+    } else {
+      arrGroundExchanges.push({
+        type: "pilot_first",
+        prompt: `${destName} Ground를 호출해 택시를 요청하세요.\n예: "${destName} Ground, ${C}, request taxi to gate."`,
+        requiredRequest: [["request taxi"]],
+        atcMessage: `${C}, ${destName} Ground, taxi to gate ${gateStr}.`,
+        atcSpeech: `${cs}, ${destSp} Ground, taxi to gate ${digitsToSpeech(gateStr)}.`,
+        requiredReadback: ["taxi to gate", `gate ${gateStr}`]
+      });
+    }
+    if (Math.random() < 0.5) {
+      const traffic = pickRandom(["Asiana A320", "Air Busan A321", "Jeju Air Boeing 737", "Jin Air Boeing 777"]);
+      const side = pickRandom(["left", "right"]);
+      arrGroundExchanges.push(
+        {
+          type: "atc_first",
+          atcMessage: `${C}, give way to ${traffic} on your ${side}.`,
+          atcSpeech: `${cs}, give way to ${traffic} on your ${side}.`,
+          requiredReadback: ["give way"]
+        },
+        {
+          type: "atc_first",
+          atcMessage: `${C}, continue taxi.`,
+          atcSpeech: `${cs}, continue taxi.`,
+          requiredReadback: ["continue taxi"]
+        }
+      );
+    }
+
+    // ---------------- 3. TOWER(이륙) 교신 구성 ----------------
+    //  직접 이륙 허가 / standby / line up and wait / hold short 중 상황이 랜덤으로 정해짐
+    const takeoffClearance = {
+      type: "atc_first",
+      atcMessage: `${C}, ${depName} Tower, runway ${a.depRunwaySpoken}, wind ${w1.dir} at ${w1.spd}, cleared for takeoff.`,
+      atcSpeech: `${cs}, ${depSp} Tower, runway ${a.depRunwaySpeech}, wind ${digitsToSpeech(w1.dir)} at ${cardinalWord(w1.spd)}, cleared for takeoff.`,
+      requiredReadback: [depRwyAlts, "cleared for takeoff"]
+    };
+    const lineUpExchange = {
+      type: "atc_first",
+      atcMessage: `${C}, runway ${a.depRunwaySpoken}, line up and wait.`,
+      atcSpeech: `${cs}, runway ${a.depRunwaySpeech}, line up and wait.`,
+      requiredReadback: [["line up and wait", "lineup and wait", "position and hold"], depRwyAlts]
+    };
+    const readyExchange = {
+      type: "pilot_first",
+      prompt: `${depName} Tower를 호출해 이륙 준비가 되었다고 알리세요. (콜사인 + ready for departure)\n예: "${depName} Tower, ${C}, runway ${a.depRunwaySpoken}, ready for departure."`,
+      requiredRequest: [["ready for departure", "ready for takeoff"]]
+    };
+
+    const towerRoll = Math.random();
+    let towerExchanges;
+    if (towerRoll < 0.35) {
+      // 바로 이륙 허가
+      towerExchanges = [{ ...readyExchange, atcMessage: takeoffClearance.atcMessage, atcSpeech: takeoffClearance.atcSpeech,
+                          requiredReadback: takeoffClearance.requiredReadback }];
+    } else if (towerRoll < 0.55) {
+      // 잠시 대기
+      towerExchanges = [
+        { ...readyExchange, atcMessage: `${C}, standby.`, atcSpeech: `${cs}, standby.`, requiredReadback: ["standby"] },
+        takeoffClearance
+      ];
+    } else if (towerRoll < 0.78) {
+      // 활주로에 진입해서 대기
+      towerExchanges = [
+        { ...readyExchange, atcMessage: lineUpExchange.atcMessage, atcSpeech: lineUpExchange.atcSpeech,
+          requiredReadback: lineUpExchange.requiredReadback },
+        takeoffClearance
+      ];
+    } else {
+      // 활주로 앞에서 대기(hold short) -> (가끔 line up and wait) -> 이륙 허가
+      towerExchanges = [
+        { ...readyExchange,
+          atcMessage: `${C}, hold short runway ${a.depRunwaySpoken}, traffic on final.`,
+          atcSpeech: `${cs}, hold short runway ${a.depRunwaySpeech}, traffic on final.`,
+          requiredReadback: ["hold short", depRwyAlts] }
+      ];
+      if (Math.random() < 0.5) towerExchanges.push(lineUpExchange);
+      towerExchanges.push(takeoffClearance);
+    }
+    towerExchanges.push(contactExchange(`${depTma} Departure`, fx(frD.dep), " airborne", `${depTmaSp} Departure`));
+
+    const stages = [
+      // 1. CLEARANCE DELIVERY
+      { station: `${depName} DELIVERY`, freq: frD.del, nextFreq: frD.gnd, gateBadge: "dep", exchanges: deliveryExchanges },
+
+      // 2. GROUND (푸시백 + 택시)
+      {
+        station: `${depName} GROUND`, freq: frD.gnd, nextFreq: frD.twr, gateBadge: "dep",
+        exchanges: [
+          {
+            type: "pilot_first",
+            prompt: `${depName} Ground를 호출하여 푸시백 준비가 되었다고 요청하세요.\n예: "${depName} Ground, ${C}, ready for pushback." 또는 "...request pushback."`,
+            requiredRequest: [["request pushback", "ready for pushback"]],
+            atcMessage: `${C}, ${depName} Ground, ${a.pushbackMessage}`,
+            atcSpeech: `${cs}, ${depSp} Ground, ${digitsInStringToSpeech(a.pushbackMessage)}`,
+            requiredReadback: ["pushback approved"]
+          },
+          {
+            type: "pilot_first",
+            prompt: `푸시백이 끝났습니다. 이제 택시(taxi) 허가를 별도로 요청하세요.\n예: "${depName} Ground, ${C}, request taxi."`,
+            requiredRequest: ["request taxi"],
+            atcMessage: `${C}, taxi to runway ${a.depRunwaySpoken} via Taxiway ${a.taxiwaySpoken[0]} ${a.taxiwaySpoken[1]}.`,
+            atcSpeech: `${cs}, taxi to runway ${a.depRunwaySpeech} via Taxiway ${a.taxiwaySpoken[0]} | ${a.taxiwaySpoken[1]}.`,
+            requiredReadback: [makeTaxiwayRequirement([a.taxiwaySpoken[0], a.taxiwaySpoken[1]])]
+          },
+          ...(frD.gnd !== frD.twr ? [contactExchange("Tower", fx(frD.twr))] : [])
+        ]
+      },
+
+      // 3. TOWER (이륙): 조종사가 "ready for departure" -> 관제사 응답은 상황에 따라 다름
+      { station: `${depName} TOWER`, freq: frD.twr, nextFreq: frD.dep, exchanges: towerExchanges },
+
+      // 4. DEPARTURE
+      { station: `${depTma.toUpperCase()} DEPARTURE`, freq: frD.dep, nextFreq: ctrlFreq, exchanges: departureExchanges },
+
+      // 5. CONTROL (항공로 관제)
+      {
+        station: ctrlName.toUpperCase(), freq: ctrlFreq, nextFreq: frA.app,
+        exchanges: [
+          {
+            type: "pilot_first",
+            prompt: `${ctrlName}을 호출하세요. (콜사인 with you + passing 통과 고도(숫자는 자유))\n예: "${ctrlName}, ${C} with you, passing ${a.ctlPassing}."`,
+            requiredRequest: [ctrlName.toLowerCase(), makePassingRequirement('passing 고도 (예: passing FL150)')],
+            atcMessage: `${C}, ${ctrlName}, radar contact. Climb and maintain ${fl}.`,
+            atcSpeech: `${cs}, ${ctrlCity} Control, radar contact. Climb and maintain ${flSpeech}.`,
+            requiredReadback: ["climb and maintain", flAlts]
+          },
+          contactExchange(`${destTma} Approach`, fx(frA.app), " when ready for descent", `${destTmaSp} Approach`)
+        ]
+      },
+
+      // 6. APPROACH
+      {
+        station: `${destTma.toUpperCase()} APPROACH`, freq: frA.app, nextFreq: frA.twr,
+        exchanges: [
+          {
+            type: "atc_first",
+            atcMessage: `${C}, ${destTma} Approach, descend and maintain 3000. Expect ILS approach runway ${a.arrRunwaySpoken}.`,
+            atcSpeech: `${cs}, ${destTmaSp} Approach, descend and maintain ${altitudeToSpeech(3000)}. Expect ILS approach runway ${a.arrRunwaySpeech}.`,
+            requiredReadback: ["descend and maintain 3000", arrRwyAlts]
+          },
+          contactExchange("Tower", fx(frA.twr))
+        ]
+      },
+
+      // 7. TOWER (착륙 ~ 활주로 이탈)
+      { station: `${destName} TOWER`, freq: frA.twr, nextFreq: frA.gnd, exchanges: landingExchanges },
+
+      // 8. GROUND (도착 후 게이트까지 택시)
+      { station: `${destName} GROUND`, freq: frA.gnd, nextFreq: null, gateBadge: "arr", exchanges: arrGroundExchanges }
+    ];
+
+    // 조종사가 말하는 모든 문장에 콜사인 포함을 요구 (강의 팁)
+    if (REQUIRE_CALLSIGN) {
+      const csReq = makeCallsignRequirement(C);
+      stages.forEach(st => st.exchanges.forEach(ex => {
+        if (ex.type === "pilot_first") ex.requiredRequest = [...ex.requiredRequest, csReq];
+        ex.requiredReadback = [...ex.requiredReadback, csReq];
+      }));
+    }
+    return stages;
+  }
+
+  let STAGES = [];
+  let TOTAL = 8;
+  let currentIndex = 0;        // 현재 몇 번째 관제 기관(stage)인지
+  let currentExchangeIndex = 0; // 그 관제 기관 안에서 몇 번째 교신(exchange)인지
+  // subphase: 'awaiting_request' (조종사의 최초 요청을 기다리는 중)
+  //           'awaiting_readback' (ATC 지시 이후 조종사의 복창을 기다리는 중)
+  let subphase = 'awaiting_readback';
+
+  // ------------------------------------------------------------
+  // 요소 참조
+  // ------------------------------------------------------------
+  const homeScreen   = document.getElementById('homeScreen');
+  const createRouteBtn = document.getElementById('createRouteBtn');
+  const routeForm     = document.getElementById('routeForm');
+  const callsignInput = document.getElementById('callsignInput');
+  const depInput       = document.getElementById('depInput');
+  const destInput      = document.getElementById('destInput');
+  const startFlightBtn = document.getElementById('startFlightBtn');
+  const titleRight      = document.getElementById('titleRight');
+
+  const simScreen    = document.getElementById('simScreen');
+  const progressBar  = document.getElementById('progress');
+  const infoCallsign = document.getElementById('infoCallsign');
+  const infoRoute    = document.getElementById('infoRoute');
+
+  const stageView    = document.getElementById('stageView');
+  const stepTag      = document.getElementById('stepTag');
+  const stationName  = document.getElementById('stationName');
+  const stationFreq  = document.getElementById('stationFreq');
+  const msgTag       = document.getElementById('msgTag');
+  const mainMsg      = document.getElementById('mainMsg');
+  const inputBlock   = document.getElementById('inputBlock');
+  const requiredHint = document.getElementById('requiredHint');
+  const input        = document.getElementById('pilotInput');
+  const micWrap      = document.getElementById('micWrap');
+  const micBtn       = document.getElementById('micBtn');
+  const micStatus    = document.getElementById('micStatus');
+  const micHeard     = document.getElementById('micHeard');
+  const sendBtn      = document.getElementById('sendBtn');
+  const result       = document.getElementById('result');
+  const verdict      = document.getElementById('verdict');
+  const resultBody   = document.getElementById('resultBody');
+
+  const freqChange   = document.getElementById('freqChange');
+  const freqSysLabel = document.getElementById('freqSysLabel');
+  const freqTarget   = document.getElementById('freqTarget');
+  const freqNote     = document.getElementById('freqNote');
+  const countdownNum = document.getElementById('countdownNum');
+  const ring         = document.getElementById('ring');
+
+  const complete     = document.getElementById('complete');
+  const replayBtn    = document.getElementById('replayBtn');
+
+  const atisBadge    = document.getElementById('atisBadge');
+  const atisLetter   = document.getElementById('atisLetter');
+  const gateBadge    = document.getElementById('gateBadge');
+  const gateNumberEl = document.getElementById('gateNumber');
+
+  const voiceToggleBtn   = document.getElementById('voiceToggleBtn');
+  const replaySpeechBtn  = document.getElementById('replaySpeechBtn');
+
+  // ==================================================================
+  // 음성(TTS) 재생 — 브라우저 내장 Web Speech API 사용
+  // ------------------------------------------------------------
+  // 참고: Typecast 같은 외부 AI 음성 서비스는 자체 API 키/유료 계정이
+  // 필요해서 이 화면(정적 HTML)에서 바로 붙일 수 없습니다. 대신 크롬/엣지
+  // 등 최신 브라우저에 내장된 영어 음성 엔진을 사용해 ATC 교신 문구를
+  // 자동으로 읽어주도록 구현했습니다. (인터넷 연결 없이도 대부분 동작)
+  // ==================================================================
+  let voiceEnabled = true;
+  let availableVoices = [];
+  let chosenVoice = null;
+  let lastSpokenText = '';
+  const synth = window.speechSynthesis;
+
+  function pickBestEnglishVoice(){
+    if (!availableVoices.length) return null;
+    return (
+      availableVoices.find(v => /en-US/i.test(v.lang) && /male/i.test(v.name)) ||
+      availableVoices.find(v => /en-US/i.test(v.lang)) ||
+      availableVoices.find(v => /en-GB/i.test(v.lang)) ||
+      availableVoices.find(v => /^en/i.test(v.lang)) ||
+      availableVoices[0]
+    );
+  }
+
+  function loadVoices(){
+    if (!synth) return;
+    availableVoices = synth.getVoices();
+    chosenVoice = pickBestEnglishVoice();
+  }
+
+  if (synth) {
+    loadVoices();
+    synth.onvoiceschanged = loadVoices;
+  } else {
+    voiceToggleBtn.disabled = true;
+    voiceToggleBtn.textContent = '🔇 미지원';
+    voiceToggleBtn.title = '이 브라우저는 음성 합성을 지원하지 않습니다.';
+  }
+
+  // 음성 재생 (문장 안에 "|"가 있으면 그 자리에서 잠깐 쉬었다가 이어서 읽음)
+  // 예: "via Taxiway Alpha | Bravo" -> "Taxiway Alpha" ... (잠깐 쉼) ... "Bravo"
+  const PAUSE_MS = 600;
+  let speechToken = 0;   // 새 재생/정지가 있으면 이전 재생의 이어읽기를 무효화
+
+  // ==================================================================
+  // VHF 무전기 "지지직" 잡음 생성기 (Web Audio API 실시간 합성)
+  // ==================================================================
+  const radioStatic = (() => {
+    let ctx = null;
+    let noiseNode = null;
+    let gainNode = null;
+    let crackleTimer = null;
+
+    function ensureContext() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!ctx) ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+
+    function start(volume = 0.035) {
+      const ac = ensureContext();
+      if (!ac) return;
+      stop();
+
+      const bufferSize = ac.sampleRate * 2;
+      const buffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+      const data = buffer.getChannelData(0);
+      let lastOut = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        lastOut = (lastOut + 0.08 * white) / 1.08;
+        data[i] = white * 0.35 + lastOut * 1.8;
+      }
+
+      const src = ac.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+
+      const bandpass = ac.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.frequency.value = 1450;
+      bandpass.Q.value = 0.85;
+
+      gainNode = ac.createGain();
+      gainNode.gain.setValueAtTime(0.0001, ac.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, volume), ac.currentTime + 0.08);
+
+      src.connect(bandpass);
+      bandpass.connect(gainNode);
+      gainNode.connect(ac.destination);
+      src.start();
+      noiseNode = src;
+
+      crackleTimer = setInterval(() => {
+        if (!ctx || !gainNode || ctx.state !== 'running') return;
+        if (Math.random() < 0.45) triggerCrackle(volume * 1.9);
+      }, 450);
+    }
+
+    function triggerCrackle(peak = 0.06) {
+      const ac = ensureContext();
+      if (!ac) return;
+      const len = Math.floor(ac.sampleRate * 0.025);
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) {
+        const env = Math.pow(1 - i / len, 2);
+        ch[i] = (Math.random() * 2 - 1) * env;
+      }
+      const s = ac.createBufferSource();
+      s.buffer = buf;
+
+      const hp = ac.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 1200;
+
+      const g = ac.createGain();
+      g.gain.value = peak;
+
+      s.connect(hp);
+      hp.connect(g);
+      g.connect(ac.destination);
+      s.start();
+    }
+
+    function squelchTailAndStop() {
+      if (crackleTimer) { clearInterval(crackleTimer); crackleTimer = null; }
+      if (!ctx || !gainNode) { stop(); return; }
+      try {
+        triggerCrackle(0.055);
+        const now = ctx.currentTime;
+        gainNode.gain.cancelScheduledValues(now);
+        gainNode.gain.setValueAtTime(Math.max(0.0001, gainNode.gain.value), now);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+        const oldNode = noiseNode;
+        noiseNode = null;
+        gainNode = null;
+        setTimeout(() => {
+          try { if (oldNode) oldNode.stop(); } catch (e) {}
+        }, 160);
+      } catch (e) {
+        stop();
+      }
+    }
+
+    function stop() {
+      if (crackleTimer) { clearInterval(crackleTimer); crackleTimer = null; }
+      if (noiseNode) {
+        try { noiseNode.stop(); } catch (e) {}
+        noiseNode = null;
+      }
+      gainNode = null;
+    }
+
+    return { start, stop, squelchTailAndStop };
+  })();
+
+  function stopSpeech(){
+    speechToken++;
+    if (synth) synth.cancel();
+    radioStatic.stop();
+    replaySpeechBtn.classList.remove('speaking');
+  }
+
+  function speak(text){
+    if (!voiceEnabled || !synth || !text) return;
+    stopSpeech();                       // 이전에 읽던 문장이 있으면 정지 후 새로 읽기
+    const myToken = speechToken;
+    lastSpokenText = text;
+    const parts = text.split('|').map(t => t.trim()).filter(Boolean);
+
+    // 관제 무전 시작: 지지직 잡음 먼저 살짝 깔고 음성 재생
+    radioStatic.start(0.035);
+
+    const playPart = (i) => {
+      if (myToken !== speechToken) return;
+      if (i >= parts.length) {
+        replaySpeechBtn.classList.remove('speaking');
+        radioStatic.squelchTailAndStop();
+        return;
+      }
+      const utter = new SpeechSynthesisUtterance(parts[i]);
+      utter.lang = 'en-US';
+      if (chosenVoice) utter.voice = chosenVoice;
+      utter.rate = 0.95;
+      utter.pitch = 1.0;
+      utter.onstart = () => replaySpeechBtn.classList.add('speaking');
+      const next = () => {
+        if (myToken !== speechToken) return;
+        if (i + 1 < parts.length) setTimeout(() => playPart(i + 1), PAUSE_MS);
+        else {
+          replaySpeechBtn.classList.remove('speaking');
+          radioStatic.squelchTailAndStop();
+        }
+      };
+      utter.onend = next;
+      utter.onerror = next;
+      synth.speak(utter);
+    };
+    setTimeout(() => {
+      if (myToken === speechToken) playPart(0);
+    }, 120);
+  }
+
+  voiceToggleBtn.addEventListener('click', () => {
+    voiceEnabled = !voiceEnabled;
+    voiceToggleBtn.textContent = voiceEnabled ? '🔊 음성 ON' : '🔇 음성 OFF';
+    voiceToggleBtn.classList.toggle('speaking', voiceEnabled);
+    if (!voiceEnabled) stopSpeech();
+  });
+
+  replaySpeechBtn.addEventListener('click', () => {
+    speak(lastSpokenText);
+  });
+
+  // ==================================================================
+  // 홈 화면 로직
+  // ==================================================================
+  // 난이도 선택: 선택한 난이도를 저장하고 루트 만들기 화면으로 이동
+  // (중간/어려움은 나중에 별도 진행 방식으로 교체할 자리 - 지금은 쉬움과 동일)
+  let difficulty = 'easy';
+  const modeScreen    = document.getElementById('modeScreen');
+  const levelTag      = document.getElementById('levelTag');
+  const levelNote     = document.getElementById('levelNote');
+  const backToModeBtn = document.getElementById('backToModeBtn');
+  const LEVEL_LABELS  = { easy: 'EASY', medium: 'MEDIUM', hard: 'HARD' };
+
+  function showRouteScreen(){
+    modeScreen.style.display = 'none';
+    homeScreen.style.display = 'block';
+    routeForm.classList.add('show');
+    createRouteBtn.style.display = 'none';
+    levelTag.textContent = LEVEL_LABELS[difficulty];
+    levelTag.className = 'level-tag ' + difficulty;
+    levelNote.textContent = (difficulty === 'medium')
+      ? '※ 중간: 🎤 버튼을 꾹 누른 채로 말하는 음성 인식과 직접 입력을 둘 다 쓸 수 있습니다.'
+      : (difficulty === 'hard')
+        ? '※ 어려움: 아직 준비 중이라 현재는 중간(음성 인식 + 입력)과 동일하게 진행됩니다.'
+        : '';
+    levelNote.classList.toggle('show', difficulty !== 'easy');
+    titleRight.textContent = LEVEL_LABELS[difficulty];
+  }
+  function showModeScreen(){
+    homeScreen.style.display = 'none';
+    simScreen.style.display = 'none';
+    modeScreen.style.display = 'block';
+    titleRight.textContent = 'MODE SELECT';
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      difficulty = btn.dataset.level;
+      if (difficulty !== 'easy') requestMicPermission();   // 중간/어려움: 선택하는 순간 마이크 허용 팝업
+      showRouteScreen();
+      callsignInput.focus();
+    });
+  });
+  backToModeBtn.addEventListener('click', showModeScreen);
+
+  createRouteBtn.addEventListener('click', () => {
+    routeForm.classList.add('show');
+    createRouteBtn.style.display = 'none';
+    callsignInput.focus();
+  });
+  titleRight.textContent = 'MODE SELECT';
+
+  startFlightBtn.addEventListener('click', () => {
+    const callsign = callsignInput.value.trim() || "Korean Air 123";
+    const dep = (depInput.value.trim() || "RKSI").toUpperCase();
+    const dest = (destInput.value.trim() || "RJAA").toUpperCase();
+
+    flight = { callsign, callsignSpeech: callsignToSpeech(callsign), dep, dest };
+    assigned = generateAssignments();          // 이번 비행의 활주로/유도로/ATIS를 무작위로 배정
+    STAGES = buildStages(flight, assigned);
+    TOTAL = STAGES.length;
+
+    infoCallsign.textContent = flight.callsign;
+    infoRoute.textContent = `${flight.dep} → ${flight.dest}`;
+    titleRight.textContent = `${flight.dep}→${flight.dest}`;
+    atisLetter.textContent = `Information ${assigned.atis}`;
+
+    progressBar.innerHTML = '';
+    for (let i = 0; i < TOTAL; i++) {
+      const d = document.createElement('div');
+      d.className = 'dot';
+      d.id = 'dot' + i;
+      progressBar.appendChild(d);
+    }
+
+    homeScreen.style.display = 'none';
+    simScreen.style.display = 'block';
+
+    // 중간/어려움: Whisper 음성 인식 버튼 표시 (쉬움은 직접 입력만)
+    const voiceMode = (difficulty !== 'easy');
+    micWrap.style.display = voiceMode ? 'block' : 'none';
+    setMicStatus('', '');
+    input.placeholder = voiceMode ? '말하거나 입력하세요...' : '입력하세요...';
+    let inFrameNow = false;
+    try { inFrameNow = (window.top !== window.self); } catch (e) { inFrameNow = true; }
+    if (voiceMode && inFrameNow) {
+      setTimeout(() => setMicStatus('⚠️ 이 화면(미리보기 창)에서는 🎤 버튼을 쓸 수 없어요. 새 탭에서 열거나 직접 입력해 주세요.', 'ng'), 0);
+    } else if (voiceMode) {
+      setTimeout(() => requestMicPermission().then(ok => {
+        if (ok && micGranted) {
+          setMicStatus(MIC_READY_MSG, 'ok');
+          initWhisperPipeline(true); // 백그라운드에서 Whisper 모델 미리 준비
+        }
+      }), 0);
+    }
+
+    currentIndex = 0;
+    currentExchangeIndex = 0;
+    complete.classList.remove('show');
+    stageView.style.display = 'block';
+    renderStage();
+  });
+
+  // ==================================================================
+  // 시뮬레이션 로직
+  // ==================================================================
+  const RING_CIRC = 2 * Math.PI * 34;
+  ring.style.strokeDasharray = RING_CIRC;
+
+  function tick(){
+    const now = new Date();
+    const h = String(now.getUTCHours()).padStart(2,'0');
+    const m = String(now.getUTCMinutes()).padStart(2,'0');
+    const s = String(now.getUTCSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${h}:${m}:${s}Z`;
+    // 한국 시간(KST, UTC+9) - 기기 설정과 상관없이 항상 서울 기준
+    try {
+      const kst = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now).replace(/^24/, '00');
+      document.getElementById('clockKst').textContent = `KST ${kst}`;
+    } catch (e) {
+      const k = new Date(now.getTime() + 9 * 3600 * 1000);   // 시간대 정보를 못 쓰는 환경 대비
+      const pad = (n) => String(n).padStart(2, '0');
+      document.getElementById('clockKst').textContent = `KST ${pad(k.getUTCHours())}:${pad(k.getUTCMinutes())}:${pad(k.getUTCSeconds())}`;
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  function updateProgress(){
+    for (let i = 0; i < TOTAL; i++) {
+      const d = document.getElementById('dot' + i);
+      if (!d) continue;
+      d.classList.remove('done','active');
+      if (i < currentIndex) d.classList.add('done');
+      else if (i === currentIndex) d.classList.add('active');
+    }
+  }
+
+  // ATIS 배지는 Clearance Delivery(0번째) 단계에서만 노출
+  function updateAtisBadge(){
+    if (currentIndex === 0) atisBadge.classList.add('show');
+    else atisBadge.classList.remove('show');
+  }
+
+  // GATE 배지는 Delivery(0번째) ~ Ground(1번째) 단계, 즉 아직
+  // 게이트에 있거나 막 떠나는 시점까지만 노출합니다.
+  function updateGateBadge(){
+    const st = STAGES[currentIndex];
+    if (st && st.gateBadge) {
+      gateNumberEl.textContent = (st.gateBadge === 'arr') ? assigned.arrGate : assigned.gate;
+      gateBadge.classList.add('show');
+    } else {
+      gateBadge.classList.remove('show');
+    }
+  }
+
+  // ------------------------------------------------------------
+  // 현재 stage로 진입할 때 호출 (exchange 0번부터 다시 시작)
+  // ------------------------------------------------------------
+  function renderStage(){
+    currentExchangeIndex = 0;
+    const stage = STAGES[currentIndex];
+    const exch = stage.exchanges[0];
+
+    subphase = (exch.type === 'pilot_first') ? 'awaiting_request' : 'awaiting_readback';
+
+    stepTag.textContent = `STEP ${currentIndex+1} / ${TOTAL} — ${stage.station}`;
+    stationName.textContent = stage.station;
+    stationFreq.textContent = `FREQ ${stage.freq}`;
+
+    freqChange.classList.remove('show');
+    inputBlock.style.display = 'block';
+
+    renderExchange();
+
+    input.value = '';
+    input.disabled = false;
+    sendBtn.disabled = false;
+    result.classList.remove('show','ok','ng');
+
+    updateAtisBadge();
+    updateGateBadge();
+    updateProgress();
+    input.focus();
+  }
+
+  // ------------------------------------------------------------
+  // 현재 exchange + subphase에 맞춰 메시지 영역만 다시 그림
+  // ------------------------------------------------------------
+  function renderExchange(){
+    if (typeof micStatus !== 'undefined' && micStatus) { micStatus.textContent = ''; micStatus.classList.remove('ok', 'ng'); }
+    if (typeof micHeard !== 'undefined' && micHeard) micHeard.textContent = '';
+    const exch = STAGES[currentIndex].exchanges[currentExchangeIndex];
+
+    if (subphase === 'awaiting_request') {
+      msgTag.className = 'tag system';
+      msgTag.textContent = 'SYSTEM';
+      mainMsg.className = 'msg prompt';
+      mainMsg.textContent = exch.prompt;
+
+      requiredHint.innerHTML = '필요한 요청 문구: ' +
+        exch.requiredRequest.map(reqLabel).map(k => `<code>${k}</code>`).join(' + ');
+      input.placeholder = "관제소를 호출해 요청하세요...";
+    } else {
+      msgTag.className = 'tag';
+      msgTag.textContent = exch.sceneLabel ? `ATC · ${exch.sceneLabel}` : 'ATC';
+      mainMsg.className = 'msg';
+      mainMsg.textContent = exch.atcMessage;
+      speak(exch.atcSpeech || exch.atcMessage); // ATC 교신 문구를 영어 음성으로 재생(발음 보정판 우선)
+
+      // requiredReadback의 각 항목은 문자열(고정 문구) 또는
+      // 배열(여러 표현 중 하나만 맞아도 정답, 예: 활주로 약어 허용)일 수 있습니다.
+      requiredHint.innerHTML = '필수 포함 문구: ' +
+        exch.requiredReadback.map(reqLabel).map(k => `<code>${k}</code>`).join(' + ');
+      input.placeholder = "복창하세요...";
+    }
+  }
+
+  // ------------------------------------------------------------
+  // SEND 버튼 / Enter 입력 처리
+  // ------------------------------------------------------------
+  // rawOverride가 있으면 (음성 인식 결과) 입력칸에 쓰지 않고 그 문장을 바로 검사
+  function checkAnswer(rawOverride){
+    const fromVoice = (typeof rawOverride === 'string');
+    const raw = (fromVoice ? rawOverride : input.value).trim();
+    if (!raw) return;
+    matchFuzzy = fromVoice;                    // 음성이면 비슷한 발음도 인정
+    const heard = fromVoice ? ` (인식된 말: "${raw}")` : '';
+
+    const normalized = buildMatchText(raw);   // 원문 + 숫자/문자 변환본
+    const exch = STAGES[currentIndex].exchanges[currentExchangeIndex];
+
+    if (subphase === 'awaiting_request') {
+      const missing = exch.requiredRequest.filter(k => !reqMatches(normalized, k));
+      const ok = missing.length === 0;
+
+      result.classList.remove('ok','ng');
+      if (ok) {
+        result.classList.add('ok');
+        verdict.textContent = "✅ 요청이 접수되었습니다";
+        resultBody.textContent = "관제사가 응답을 준비 중입니다...";
+        result.classList.add('show');
+
+        input.disabled = true;
+        sendBtn.disabled = true;
+
+        scheduleAdvance(() => {
+          subphase = 'awaiting_readback';
+          renderExchange();
+          input.value = '';
+          input.disabled = false;
+          sendBtn.disabled = false;
+          result.classList.remove('show');
+          input.focus();
+        }, 900);
+      } else {
+        result.classList.add('ng');
+        verdict.textContent = "❌ 요청 형식이 올바르지 않습니다";
+        resultBody.textContent = "빠진 표현: " + missing.map(reqLabel).join(', ') + " — 다시 요청하세요." + heard;
+        result.classList.add('show');
+      }
+      return;
+    }
+
+    // ---- 복창(readback) 검사 ----
+    // [수정 사항 1] 각 항목이 문자열이든, 여러 허용 표현의 배열이든
+    // reqMatches()가 알아서 처리합니다 (예: "33 left"와 "33l" 둘 다 정답 처리).
+    const missing = exch.requiredReadback.filter(k => !reqMatches(normalized, k));
+    const isCorrect = missing.length === 0;
+
+    result.classList.remove('ok','ng');
+    if (isCorrect) {
+      result.classList.add('ok');
+      verdict.textContent = "✅ 정답입니다";
+      resultBody.textContent = "ATC: \"Roger, read-back correct.\"";
+      result.classList.add('show');
+
+      input.disabled = true;
+      sendBtn.disabled = true;
+
+      const stage = STAGES[currentIndex];
+      currentExchangeIndex++;
+
+      if (currentExchangeIndex < stage.exchanges.length) {
+        // ---- 같은 관제 기관 안에서 다음 exchange로 (예: 푸시백 -> 택시) ----
+        // 주파수는 그대로이므로 5초 대기 없이, 짧은 텀만 두고 다음 요청으로 넘어갑니다.
+        scheduleAdvance(() => {
+          subphase = (stage.exchanges[currentExchangeIndex].type === 'pilot_first')
+            ? 'awaiting_request' : 'awaiting_readback';
+          renderExchange();
+          input.value = '';
+          input.disabled = false;
+          sendBtn.disabled = false;
+          result.classList.remove('show');
+          input.focus();
+        }, 900);
+      } else {
+        // ---- 이 관제 기관에서의 마지막 교신 -> 5초간 화면(마지막 ATC 응답)을
+        //      그대로 유지한 채로 카운트다운 후 다음 관제 기관으로 이동 ----
+        holdThenTransition(stage.nextFreq);
+      }
+    } else {
+      result.classList.add('ng');
+      verdict.textContent = "❌ 오답입니다";
+      resultBody.textContent = "필수 문구가 누락되었습니다: " + missing.map(reqLabel).join(', ') + " — 다시 복창하세요." + heard;
+      result.classList.add('show');
+    }
+  }
+
+  // ------------------------------------------------------------
+  // [수정 사항 1] 정답 확인 메시지를 화면에 그대로 둔 채로
+  // 5초 카운트다운을 진행한 뒤 다음 단계로 넘어감 (또는 시나리오 종료)
+  // ------------------------------------------------------------
+  function holdThenTransition(nextFreq){
+    // 입력창은 이미 비활성화된 상태 - ATC의 마지막 응답과 정답 확인
+    // 메시지가 화면에서 사라지지 않고 그대로 보이는 채로 아래쪽에
+    // 카운트다운만 이어붙입니다.
+    if (nextFreq === null) {
+      freqSysLabel.textContent = "SYSTEM — 비행 종료 처리 중";
+      freqTarget.textContent = "-";
+      freqNote.textContent = "곧 시뮬레이션이 종료됩니다.";
+    } else {
+      freqSysLabel.textContent = "SYSTEM — 주파수 변경 중";
+      freqTarget.textContent = nextFreq;
+      freqNote.textContent = "잠시 후 자동으로 다음 관제 기관과 연결됩니다.";
+    }
+
+    freqChange.classList.add('show');
+
+    runCountdown(5, () => goNextStage(nextFreq));
+  }
+
+  // 다음 관제 기관으로 이동 (또는 마지막이면 완료 화면) - 카운트다운 종료/건너뛰기 공용
+  function goNextStage(nextFreq){
+    freqChange.classList.remove('show');
+
+    if (nextFreq === null) {
+      stageView.style.display = 'none';
+      complete.classList.add('show');
+      currentIndex = TOTAL; // 진행 표시줄을 전부 done으로 표시하기 위함
+      updateProgress();
+      return;
+    }
+
+    currentIndex++;
+    renderStage();
+  }
+
+  // ------------------------------------------------------------
+  // 예약된 자동 진행(0.9초 대기 / 5초 카운트다운)을 추적해서
+  // 건너뛰기 버튼이 즉시 실행할 수 있게 함
+  // ------------------------------------------------------------
+  let advanceTimeout = null, pendingRun = null;
+  let countdownTimer = null, pendingCountdownDone = null;
+
+  function scheduleAdvance(fn, ms){
+    pendingRun = fn;
+    advanceTimeout = setTimeout(() => {
+      advanceTimeout = null; pendingRun = null;
+      fn();
+    }, ms);
+  }
+
+  function clearPending(){
+    if (advanceTimeout){ clearTimeout(advanceTimeout); advanceTimeout = null; }
+    if (countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
+    pendingRun = null; pendingCountdownDone = null;
+  }
+
+  // 테스트용: 입력 없이 한 단계씩 앞으로
+  //  요청 단계 -> ATC 응답(음성 재생) -> 복창 단계 -> 다음 교신/다음 관제 기관
+  function skipStep(){
+    abortListening();
+    if (!STAGES.length || complete.classList.contains('show')) return;
+
+    // 자동 진행 대기 중이면 그 동작을 바로 실행
+    if (pendingRun){
+      const f = pendingRun; clearPending(); f(); return;
+    }
+    if (pendingCountdownDone){
+      const f = pendingCountdownDone; clearPending(); f(); return;
+    }
+
+    result.classList.remove('show','ok','ng');
+    input.value = '';
+    input.disabled = false;
+    sendBtn.disabled = false;
+
+    const stage = STAGES[currentIndex];
+    if (!stage) return;
+
+    if (subphase === 'awaiting_request') {
+      subphase = 'awaiting_readback';
+      renderExchange();
+      input.focus();
+      return;
+    }
+
+    currentExchangeIndex++;
+    if (currentExchangeIndex < stage.exchanges.length) {
+      subphase = (stage.exchanges[currentExchangeIndex].type === 'pilot_first')
+        ? 'awaiting_request' : 'awaiting_readback';
+      renderExchange();
+      input.focus();
+    } else {
+      goNextStage(stage.nextFreq);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // 5초 카운트다운 (setTimeout 기반 setInterval 타이머)
+  // ------------------------------------------------------------
+  function runCountdown(seconds, onDone){
+    let remaining = seconds;
+    countdownNum.textContent = remaining;
+    ring.style.strokeDashoffset = 0;
+
+    pendingCountdownDone = onDone;
+    countdownTimer = setInterval(() => {
+      remaining--;
+      countdownNum.textContent = remaining > 0 ? remaining : 0;
+
+      const progress = (seconds - remaining) / seconds;
+      ring.style.strokeDashoffset = RING_CIRC * progress;
+
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null; pendingCountdownDone = null;
+        onDone();
+      }
+    }, 1000);
+  }
+
+  // ------------------------------------------------------------
+  // 이벤트 연결
+  // ------------------------------------------------------------
+  sendBtn.addEventListener('click', () => checkAnswer());
+  document.getElementById('skipBtn').addEventListener('click', skipStep);
+
+  // ==================================================================
+  // Whisper AI 음성 인식 엔진 고도화 (Transformers.js + Web Audio 16kHz)
+  // ------------------------------------------------------------------
+  // 1) 앞뒤 무음 구간을 자동으로 잘라내 짧은 발화("Standby", "Roger")나
+  //    버튼 누르고 0.5초 뒤 말한 구간의 노이즈를 줄입니다.
+  // 2) 현재 단계(요청 vs 복창)와 배정된 콜사인/활주로/주파수/스쿼크/SID를
+  //    프롬프트 힌트에 반영해 항공 관제 용어 인식률을 높입니다.
+  // 3) 한국식 발음 교정(MISHEARD_FIXES + HANGUL_ENTRIES)과 결합해
+  //    영어 전용(.en) 및 다국어 모델 모두를 지원합니다.
+  // ==================================================================
+  let whisperPipe = null;
+  let whisperLoadedModel = null;
+  let whisperLoading = false;
+
+  let mediaStream = null;
+  let audioCtxRec = null;
+  let scriptNode = null;
+  let pcmChunks = [];
+  let listening = false;
+  let holding = false;
+  let pressStart = 0;
+
+  const MIC_IDLE_LABEL = '🎤 꾹 누른 채로 말하기';
+  const MIC_READY_MSG  = '✅ Whisper 준비됨 — 버튼을 꾹 누른 채로 말하고, 손을 떼면 인식해요';
+
+  function setMicStatus(text, kind){
+    micStatus.textContent = text;
+    micStatus.classList.remove('ok', 'ng');
+    if (kind) micStatus.classList.add(kind);
+  }
+
+  function resolveWhisperModelId(){
+    const sel = document.getElementById('whisperModel');
+    const val = sel ? sel.value : 'auto';
+    if (val !== 'auto') return val;
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem = navigator.deviceMemory || 4;
+    if (cores >= 6 && mem >= 8) return 'Xenova/whisper-base.en';
+    return 'Xenova/whisper-tiny.en';
+  }
+
+  async function initWhisperPipeline(silent = false){
+    const modelId = resolveWhisperModelId();
+    if (whisperPipe && whisperLoadedModel === modelId) return whisperPipe;
+    if (whisperLoading) return null;
+
+    whisperLoading = true;
+    if (!silent) {
+      setMicStatus(`⏳ Whisper AI 모델(${modelId.split('/')[1]}) 준비 중… (최초 1회 다운로드)`, '');
+    }
+    try {
+      const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+
+      whisperPipe = await pipeline('automatic-speech-recognition', modelId, {
+        progress_callback: (p) => {
+          if (!silent && p && p.status === 'progress' && typeof p.progress === 'number') {
+            setMicStatus(`⏳ Whisper 모델 다운로드 중… ${Math.round(p.progress)}% (${p.file || ''})`, '');
+          }
+        }
+      });
+      whisperLoadedModel = modelId;
+      if (!silent && !holding) setMicStatus(MIC_READY_MSG, 'ok');
+      return whisperPipe;
+    } catch (err) {
+      console.warn('Whisper load error:', err);
+      if (!silent) setMicStatus('❌ Whisper 모델 로드 실패 (인터넷 연결 확인 필요)', 'ng');
+      return null;
+    } finally {
+      whisperLoading = false;
+    }
+  }
+
+  function resetMicButton(){
+    listening = false;
+    micBtn.classList.remove('listening');
+    micBtn.textContent = MIC_IDLE_LABEL;
+  }
+
+  function cleanupAudioCapture(){
+    if (scriptNode) {
+      try { scriptNode.disconnect(); } catch (e) {}
+      scriptNode = null;
+    }
+    if (audioCtxRec) {
+      try { audioCtxRec.close(); } catch (e) {}
+      audioCtxRec = null;
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+  }
+
+  function abortListening(){
+    holding = false;
+    cleanupAudioCapture();
+    pcmChunks = [];
+    resetMicButton();
+  }
+
+  function micFailReason(){
+    let inFrame = false;
+    try { inFrame = (window.top !== window.self); } catch (e) { inFrame = true; }
+    if (inFrame) return '미리보기 창 안에서는 마이크를 쓸 수 없어요 — 새 탭에서 열어 주세요';
+    return '브라우저에서 마이크 권한이 차단됨';
+  }
+
+  // 44.1kHz/48kHz -> 16kHz 모노 리샘플링
+  function downsampleTo16k(chunks, inputSampleRate){
+    let totalLen = 0;
+    for (const c of chunks) totalLen += c.length;
+    const merged = new Float32Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+
+    if (inputSampleRate === 16000) return merged;
+    const ratio = inputSampleRate / 16000;
+    const newLen = Math.round(merged.length / ratio);
+    const result = new Float32Array(newLen);
+    for (let i = 0; i < newLen; i++) {
+      const start = Math.floor(i * ratio);
+      const end = Math.min(Math.floor((i + 1) * ratio), merged.length);
+      let sum = 0, count = 0;
+      for (let j = start; j < end; j++) { sum += merged[j]; count++; }
+      result[i] = count > 0 ? sum / count : merged[start];
+    }
+    return result;
+  }
+
+  // 앞뒤 무음 구간을 잘라내고 피크 노멀라이즈 + 발화 에너지 검사
+  function preprocessAudio16k(samples){
+    if (!samples || samples.length === 0) return { audio: samples, rms: 0 };
+
+    let sumSq = 0;
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const v = samples[i];
+      const av = Math.abs(v);
+      if (av > peak) peak = av;
+      sumSq += v * v;
+    }
+    const rms = Math.sqrt(sumSq / samples.length);
+
+    // 20ms(320샘플) 프레임 단위로 음성 활성 구간 탐색
+    const frameSize = 320;
+    const threshold = Math.max(0.012, rms * 0.45);
+    let firstActive = -1;
+    let lastActive = -1;
+
+    for (let start = 0; start + frameSize <= samples.length; start += frameSize) {
+      let fSum = 0;
+      for (let j = 0; j < frameSize; j++) {
+        const s = samples[start + j];
+        fSum += s * s;
+      }
+      const fRms = Math.sqrt(fSum / frameSize);
+      if (fRms >= threshold) {
+        if (firstActive === -1) firstActive = start;
+        lastActive = start + frameSize;
+      }
+    }
+
+    let trimmed = samples;
+    if (firstActive !== -1 && lastActive > firstActive) {
+      const pad = 1600; // 앞뒤 0.1초 여유 패딩
+      const sIdx = Math.max(0, firstActive - pad);
+      const eIdx = Math.min(samples.length, lastActive + pad);
+      trimmed = samples.slice(sIdx, eIdx);
+    }
+
+    // 목소리가 작을 때 진폭 보정 (클리핑 방지)
+    const out = new Float32Array(trimmed.length);
+    if (peak > 0.005 && peak < 0.85) {
+      const gain = Math.min(3.5, 0.75 / peak);
+      for (let i = 0; i < trimmed.length; i++) {
+        out[i] = Math.max(-1, Math.min(1, trimmed[i] * gain));
+      }
+    } else {
+      out.set(trimmed);
+    }
+
+    return { audio: out, rms };
+  }
+
+  function buildAtcPromptHint(){
+    const stage = STAGES[currentIndex] || {};
+    const exch = (stage.exchanges && stage.exchanges[currentExchangeIndex]) || {};
+    const hintParts = [
+      "Aviation VHF ATC pilot readback and request.",
+      flight.callsign ? `Callsign ${flight.callsign}.` : "",
+      flight.dep ? `Departure ${airportName(flight.dep)}.` : "",
+      flight.dest ? `Destination ${airportName(flight.dest)}.` : "",
+      assigned.depRunwaySpoken ? `Runway ${assigned.depRunwaySpoken}.` : "",
+      assigned.sid ? `SID ${assigned.sid}.` : "",
+      assigned.squawk ? `Squawk ${assigned.squawk}.` : "",
+      assigned.cruiseFL ? `Climb ${assigned.cruiseFL}.` : "",
+      exch.atcMessage ? `ATC said: ${exch.atcMessage}` : ""
+    ].filter(Boolean);
+    return hintParts.join(" ");
+  }
+
+  async function startListening(){
+    if (input.disabled || listening) return;
+    stopSpeech();
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      micGranted = true;
+    } catch (err) {
+      setMicStatus('❌ 마이크 안 됨: ' + micFailReason(), 'ng');
+      return;
+    }
+
+    if (!holding) {
+      cleanupAudioCapture();
+      return;
+    }
+
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    audioCtxRec = new AudioCtx();
+    if (audioCtxRec.state === 'suspended') await audioCtxRec.resume();
+
+    const source = audioCtxRec.createMediaStreamSource(mediaStream);
+    scriptNode = audioCtxRec.createScriptProcessor(4096, 1, 1);
+    pcmChunks = [];
+
+    scriptNode.onaudioprocess = (e) => {
+      if (!listening) return;
+      const chData = e.inputBuffer.getChannelData(0);
+      pcmChunks.push(new Float32Array(chData));
+    };
+
+    source.connect(scriptNode);
+    scriptNode.connect(audioCtxRec.destination);
+
+    listening = true;
+    micBtn.classList.add('listening');
+    micBtn.textContent = '🎙 듣는 중… (손을 떼면 Whisper 인식)';
+    setMicStatus('✅ 마이크 녹음 중 — 누른 채로 또박또박 말씀하세요', 'ok');
+
+    if (!whisperPipe || whisperLoadedModel !== resolveWhisperModelId()) {
+      initWhisperPipeline(true);
+    }
+  }
+
+  async function stopListening(cancel){
+    if (!listening) return;
+    const sampleRate = audioCtxRec ? audioCtxRec.sampleRate : 16000;
+    const captured = pcmChunks.slice();
+    cleanupAudioCapture();
+    pcmChunks = [];
+    resetMicButton();
+
+    if (cancel) {
+      setMicStatus('취소했어요 (버튼 밖에서 손을 뗐어요)', '');
+      return;
+    }
+
+    const durationSec = captured.reduce((acc, c) => acc + c.length, 0) / sampleRate;
+    if (durationSec < 0.35) {
+      setMicStatus('버튼을 너무 짧게 눌렀어요. 누른 채로 말하고 손을 떼 주세요', '');
+      return;
+    }
+
+    micBtn.disabled = true;
+    micBtn.textContent = '⏳ Whisper AI 인식 중…';
+
+    try {
+      const pipe = await initWhisperPipeline(false);
+      if (!pipe) return;
+
+      setMicStatus('⏳ 무음 정리 및 Whisper AI 음성 분석 중…', '');
+      const raw16k = downsampleTo16k(captured, sampleRate);
+      const { audio: audio16k, rms } = preprocessAudio16k(raw16k);
+
+      if (rms < 0.004 || audio16k.length < 2400) {
+        setMicStatus('⚠️ 목소리가 거의 들리지 않았어요. 마이크에 가까이 대고 다시 말해 보세요.', 'ng');
+        return;
+      }
+
+      const isMultilingual = !whisperLoadedModel.endsWith('.en');
+      const inferOpts = {
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        initial_prompt: buildAtcPromptHint()
+      };
+      if (isMultilingual) {
+        inferOpts.language = 'en';
+        inferOpts.task = 'transcribe';
+      }
+
+      const output = await pipe(audio16k, inferOpts);
+      const transcript = (output && output.text ? output.text : '').trim();
+
+      if (transcript && !/^\[.*\]$/.test(transcript) && !/^\(.*\)$/.test(transcript)) {
+        setMicStatus(`✅ Whisper 인식: "${transcript}"`, 'ok');
+        micHeard.textContent = `모델: ${whisperLoadedModel.split('/')[1]} · 구간: ${(audio16k.length / 16000).toFixed(1)}s`;
+        checkAnswer(transcript);
+      } else {
+        setMicStatus('⚠️ 말소리가 인식되지 않았어요. 마이크에 조금 더 가까이 말해보세요.', 'ng');
+      }
+    } catch (err) {
+      console.error(err);
+      setMicStatus('❌ 음성 분석 중 오류가 발생했어요: ' + (err.message || err), 'ng');
+    } finally {
+      micBtn.disabled = false;
+      micBtn.textContent = MIC_IDLE_LABEL;
+    }
+  }
+
+  let micGranted = false;
+
+  async function requestMicPermission(){
+    if (micGranted) return true;
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const st = await navigator.permissions.query({ name: 'microphone' });
+        st.onchange = () => { micGranted = (st.state === 'granted'); };
+        if (st.state === 'granted') { micGranted = true; return true; }
+        if (st.state === 'denied') { setMicStatus('❌ 마이크 안 됨: 차단됨 (' + micFailReason() + ')', 'ng'); return false; }
+      }
+    } catch (e) {}
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMicStatus('❌ 이 브라우저는 마이크 녹음을 지원하지 않아요', 'ng');
+      return false;
+    }
+    try {
+      setMicStatus('⏳ 마이크 사용 허용을 기다리는 중… (팝업에서 "허용")', '');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      micGranted = true;
+      setMicStatus(MIC_READY_MSG, 'ok');
+      return true;
+    } catch (err) {
+      setMicStatus((err && err.name === 'NotFoundError')
+        ? '❌ 마이크 안 됨: 마이크를 찾을 수 없어요'
+        : '❌ 마이크 안 됨: ' + micFailReason(), 'ng');
+      return false;
+    }
+  }
+
+  async function pressMic(){
+    if (micBtn.disabled || input.disabled) return;
+    holding = true;
+    pressStart = Date.now();
+    if (!micGranted) {
+      const ok = await requestMicPermission();
+      if (!ok) { holding = false; return; }
+      if (!holding) { setMicStatus(MIC_READY_MSG, 'ok'); return; }
+    }
+    if (holding && !listening) startListening();
+  }
+
+  const TAIL_MS = 350;
+  function releaseMic(e){
+    holding = false;
+    if (!listening) return;
+    let outside = false;
+    if (e && e.type === 'pointerup' && typeof e.clientX === 'number') {
+      const r = micBtn.getBoundingClientRect();
+      outside = e.clientX < r.left - 30 || e.clientX > r.right + 30 || e.clientY < r.top - 50 || e.clientY > r.bottom + 50;
+    }
+    if (outside) { stopListening(true); return; }
+    micBtn.textContent = '⏳ 마무리 녹음 중…';
+    setTimeout(() => { if (listening && !holding) stopListening(false); }, TAIL_MS);
+  }
+
+  micBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { micBtn.setPointerCapture(e.pointerId); } catch (err) {}
+    pressMic();
+  });
+  try {
+    const savedModel = localStorage.getItem('atcWhisperModel');
+    const sel = document.getElementById('whisperModel');
+    if (savedModel && sel) sel.value = savedModel;
+    if (sel) sel.addEventListener('change', () => {
+      try { localStorage.setItem('atcWhisperModel', sel.value); } catch (e) {}
+      whisperPipe = null;
+      whisperLoadedModel = null;
+      initWhisperPipeline(false);
+    });
+  } catch (e) {}
+  micBtn.addEventListener('pointerup', releaseMic);
+  micBtn.addEventListener('pointercancel', releaseMic);
+  micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+  micBtn.addEventListener('keydown', (e) => {
+    if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); pressMic(); }
+  });
+  micBtn.addEventListener('keyup', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); releaseMic(e); }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') checkAnswer();
+  });
+
+  replayBtn.addEventListener('click', () => {
+    abortListening();
+    clearPending();
+    stopSpeech();
+    simScreen.style.display = 'none';
+    callsignInput.value = '';
+    depInput.value = 'RKSI';
+    destInput.value = '';
+    showRouteScreen();
+    atisBadge.classList.remove('show');
+    gateBadge.classList.remove('show');
+  });
+</script>
+</body>
+</html>
